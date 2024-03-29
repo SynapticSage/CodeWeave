@@ -95,13 +95,39 @@ def download_repo(repo_url, output_file, lang, keep_comments=False, branch_or_ta
         print(f"Failed to download the repository. Status code: {response.status_code}")
         sys.exit(1)
 
+def process_zip_file(zip_file, output_file, lang, keep_comments=False):
+    """Process files from a local .zip file."""
+    with open(output_file, "w", encoding="utf-8") as outfile:
+        for file_path in zip_file.namelist():
+            # Skip directories, non-language files, less likely useful files, hidden directories, and test files
+            if file_path.endswith("/") or not is_file_type(file_path, f".{lang}") or not is_likely_useful_file(file_path, lang):
+                continue
+
+            file_content = zip_file.read(file_path).decode("utf-8")
+
+            # Skip test files based on content and files with insufficient substantive content
+            if is_test_file(file_content, lang) or not has_sufficient_content(file_content):
+                continue
+
+            if lang == "python" and not keep_comments:
+                try:
+                    file_content = remove_comments_and_docstrings(file_content)
+                except SyntaxError:
+                    # Skip files with syntax errors
+                    continue
+
+            outfile.write(f"// File: {file_path}\n" if lang == "go" else f"# File: {file_path}\n")
+            outfile.write(file_content)
+            outfile.write("\n\n")
+
 import argparse
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Download and process files from a GitHub repository.')
-    parser.add_argument('repo_url', type=str, help='The URL of the GitHub repository')
-    parser.add_argument('--lang', type=str, choices=['go', 'python'], default='python', help='The programming language of the repository')
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument('repo_url', type=str, nargs='?', help='The URL of the GitHub repository')
     group.add_argument('--zip_file', type=str, help='Path to the local .zip file')
+    parser.add_argument('--lang', type=str, choices=['go', 'python'], default='python', help='The programming language of the repository')
     parser.add_argument('--keep-comments', action='store_true', help='Keep comments and docstrings in the source code (only applicable for Python)')
     parser.add_argument('--branch_or_tag', type=str, help='The branch or tag of the repository to download', default="master")
 
