@@ -89,15 +89,22 @@ def download_repo(repo_url, output_file, keep_comments=False, branch_or_tag="mas
 import argparse
 
 if __name__ == "__main__":
-    
+
     parser = argparse.ArgumentParser(description='Download and process files from a GitHub repository.')
-    parser.add_argument('repo_url', type=str, help='The URL of the GitHub repository')
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument('repo_url', type=str, nargs='?', help='The URL of the GitHub repository')
+    group.add_argument('--zip_file', type=str, help='Path to the local .zip file')
     parser.add_argument('--keep-comments', action='store_true', help='Keep comments and docstrings in the source code')
-    parser.add_argument('--branch_or_tag', type=str, help='The branch or tag of the repository to download',default="master")
-    
+    parser.add_argument('--branch_or_tag', type=str, help='The branch or tag of the repository to download', default="master")
+
     args = parser.parse_args()
 
-    output_file = f"{args.repo_url.split('/')[-1]}_python.txt"
-    
-    download_repo(args.repo_url, output_file, args.keep_comments, args.branch_or_tag)
+    if args.repo_url:
+        output_file = f"{args.repo_url.split('/')[-1]}_python.txt"
+        download_repo(args.repo_url, output_file, args.keep_comments, args.branch_or_tag)
+    else:
+        output_file = f"{os.path.splitext(os.path.basename(args.zip_file))[0]}_python.txt"
+        with zipfile.ZipFile(args.zip_file, 'r') as zip_file:
+            process_zip_file(zip_file, output_file, args.keep_comments)
+
     print(f"Combined Python source code saved to {output_file}")
