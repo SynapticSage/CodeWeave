@@ -5,7 +5,7 @@ import zipfile
 import io
 import ast
 import logging
-# Typing imports
+import argparse
 
 def is_file_type(file_path, file_extensions):
     """Check if the file has any of the specified file extensions."""
@@ -104,8 +104,6 @@ def process_zip_file_object(zip_file:zipfile.ZipFile, output_file, langs, keep_c
     file_extensions = [f".{lang}" for lang in langs]
     with open(output_file, "w", encoding="utf-8") as outfile:
         for file_path in zip_file.namelist():
-            if file_path.endswith("index.html"):
-                import pdb; pdb.set_trace()
             if (file_path.endswith("/") 
                 or not is_file_type(file_path, file_extensions) 
                 or not any(is_likely_useful_file(file_path, lang) for lang in langs)):
@@ -125,31 +123,34 @@ def process_zip_file_object(zip_file:zipfile.ZipFile, output_file, langs, keep_c
             outfile.write(file_content)
             outfile.write("\n\n")
 
-
-if __name__ == "__main__":
-
-    import argparse
-    from github2file.github2file import download_repo, process_zip_file_object
-    import logging
-    logging.basicConfig(level=logging.DEBUG)
+def create_argument_parser():
     parser = argparse.ArgumentParser(description='Download and process files from a GitHub repository.')
-    group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument('repo_url', type=str, nargs='?', help='The URL of the GitHub repository')
-    group.add_argument('--zip_file', type=str, help='Path to the local .zip file')
+    parser.add_argument('--zip_file', type=str, help='Path to the local .zip file')
     parser.add_argument('--lang', type=str, default='python', help='The programming language(s) of the repository (comma-separated)')
-    # parser.add_argument('--lang', type=str, choices=['go', 'python', 'js', 'html'], default='python', help='The programming language of the repository')
     parser.add_argument('--keep-comments', action='store_true', help='Keep comments and docstrings in the source code (only applicable for Python)')
     parser.add_argument('--branch_or_tag', type=str, help='The branch or tag of the repository to download', default="master")
+    parser.add_argument('repo_url', type=str, help='The URL of the GitHub repository',
+                        default="", nargs='?')
+    return parser
 
-    args = parser.parse_args('--zip_file ./synapticsage.github.io-main.zip --lang html,css'.split())
-    langs = [lang.strip() for lang in args.lang.split(',')]
+def main(args=None):
+    parser = create_argument_parser()
+    try:
+        args = parser.parse_args(args)
+        langs = [lang.strip() for lang in args.lang.split(',')]
+        if args.repo_url:
+            output_file = f"{args.repo_url.split('/')[-1]}_{args.lang}.txt"
+            download_repo(args.repo_url, output_file, langs, args.keep_comments, args.branch_or_tag)
+        else:
+            output_file = f"{os.path.splitext(os.path.basename(args.zip_file))[0]}_{args.lang}.txt"
+            with zipfile.ZipFile(args.zip_file, 'r') as zf:
+                process_zip_file_object(zf, output_file, langs, args.keep_comments)
 
-    if args.repo_url:
-        output_file = f"{args.repo_url.split('/')[-1]}_{args.lang}.txt"
-        download_repo(args.repo_url, output_file, langs, args.keep_comments, args.branch_or_tag)
-    else:
-        output_file = f"{os.path.splitext(os.path.basename(args.zip_file))[0]}_{args.lang}.txt"
-        with zipfile.ZipFile(args.zip_file, 'r') as zf:
-            process_zip_file_object(zf, output_file, langs, args.keep_comments)
+        print(f"Combined {args.lang.capitalize()} source code saved to {output_file}")
+    except argparse.ArgumentError as e:
+        print(str(e))
+        parser.print_help()
+        sys.exit(1)
 
-    print(f"Combined {args.lang.capitalize()} source code saved to {output_file}")
+if __name__ == "__main__":
+    main()
