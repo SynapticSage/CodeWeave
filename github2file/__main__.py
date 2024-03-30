@@ -17,7 +17,7 @@ def main():
         from github2file.ts_js_rust2file import main as ts_js_rust_main
         ts_js_rust_main(remaining_args)
     else:
-        from github2file.github2file import main as g2f_main
+        from github2file.g2f import main as g2f_main
         g2f_main(remaining_args)  # Pass all arguments after the 'g2f' token
 
 if __name__ == "__main__":

@@ -131,12 +131,18 @@ def create_argument_parser():
     parser.add_argument('--branch_or_tag', type=str, help='The branch or tag of the repository to download', default="master")
     parser.add_argument('repo_url', type=str, help='The URL of the GitHub repository',
                         default="", nargs='?')
+    parser.add_argument('--debug', action='store_true', help='Enable debug logging')
     return parser
 
 def main(args=None):
     parser = create_argument_parser()
     try:
         args = parser.parse_args(args)
+        if args.debug:
+            # Enable debug logging
+            logging.basicConfig(level=logging.DEBUG)
+            logging.debug("Debug logging enabled")
+            logging.debug(f"Arguments: {args}")
         langs = [lang.strip() for lang in args.lang.split(',')]
         if args.repo_url:
             output_file = f"{args.repo_url.split('/')[-1]}_{args.lang}.txt"
