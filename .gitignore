@@ -1,0 +1,5 @@
+github2file.egg-info
+github2file/__pycache__
+.jukit
+*.txt
+*.pyc
