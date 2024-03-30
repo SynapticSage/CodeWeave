@@ -4,10 +4,12 @@ import requests
 import zipfile
 import io
 import ast
+import logging
+# Typing imports
 
-def is_file_type(file_path, file_extension):
-    """Check if the file has the specified file extension."""
-    return file_path.endswith(file_extension)
+def is_file_type(file_path, file_extensions):
+    """Check if the file has any of the specified file extensions."""
+    return any(file_path.endswith(ext) for ext in file_extensions)
 
 def is_likely_useful_file(file_path, lang):
     """Determine if the file is likely to be useful by excluding certain directories and specific file types."""
@@ -22,19 +24,31 @@ def is_likely_useful_file(file_path, lang):
     elif lang == "go":
         excluded_dirs.append("vendor")
         utility_or_config_files.extend(["go.mod", "go.sum", "Makefile"])
+    elif lang == "js":
+        excluded_dirs.extend(["node_modules", "dist", "build"])
+        utility_or_config_files.extend(["package.json", "package-lock.json", "webpack.config.js"])
+    elif lang == "html":
+        excluded_dirs.extend(["css", "js", "images", "fonts"])
 
     if any(part.startswith('.') for part in file_path.split('/')):
+        logging.debug(f"Skipping hidden file: {file_path}")
         return False
     if 'test' in file_path.lower():
+        logging.debug(f"Skipping test file: {file_path}")
         return False
     for excluded_dir in excluded_dirs:
         if f"/{excluded_dir}/" in file_path or file_path.startswith(excluded_dir + "/"):
+            logging.debug(f"Skipping excluded directory: {file_path}")
             return False
     for file_name in utility_or_config_files:
         if file_name in file_path:
+            logging.debug(f"Skipping utility or config file: {file_path}")
             return False
     for doc_file in github_workflow_or_docs:
-        if doc_file in file_path:
+        doc_file_check = (doc_file in file_path if not doc_file.startswith(".") else
+                 doc_file in os.path.basename(file_path))
+        if doc_file_check:
+            logging.debug(f"Skipping GitHub workflow or documentation file: {file_path}")
             return False
     return True
 
@@ -45,6 +59,8 @@ def is_test_file(file_content, lang):
         test_indicators = ["import unittest", "import pytest", "from unittest", "from pytest"]
     elif lang == "go":
         test_indicators = ["import testing", "func Test"]
+    elif lang == "js":
+        test_indicators = ["describe(", "it(", "test(", "expect(", "jest", "mocha"]
     return any(indicator in file_content for indicator in test_indicators)
 
 def has_sufficient_content(file_content, min_line_count=10):
@@ -71,55 +87,69 @@ def download_repo(repo_url, output_file, lang, keep_comments=False, branch_or_ta
 
     if response.status_code == 200:
         zip_file = zipfile.ZipFile(io.BytesIO(response.content))
-        process_zip_file(zip_file, output_file, lang, keep_comments)
+        process_zip_file_object(zip_file, output_file, lang, keep_comments)
     else:
         print(f"Failed to download the repository. Status code: {response.status_code}")
         sys.exit(1)
 
 
-def process_zip_file(zip_file, output_file, lang, keep_comments=False):
+def process_zip_file(zip_file:str, output_file, lang, keep_comments=False):
+    """ Process files from a local .zip file. """
+    with zipfile.ZipFile(zip_file, 'r') as zip_file:
+        process_zip_file_object(zip_file, output_file, lang, keep_comments)
+
+
+def process_zip_file_object(zip_file:zipfile.ZipFile, output_file, langs, keep_comments=False):
     """Process files from a local .zip file."""
+    file_extensions = [f".{lang}" for lang in langs]
     with open(output_file, "w", encoding="utf-8") as outfile:
         for file_path in zip_file.namelist():
-            # Skip directories, non-language files, less likely useful files, hidden directories, and test files
-            if file_path.endswith("/") or not is_file_type(file_path, f".{lang}") or not is_likely_useful_file(file_path, lang):
+            if file_path.endswith("index.html"):
+                import pdb; pdb.set_trace()
+            if (file_path.endswith("/") 
+                or not is_file_type(file_path, file_extensions) 
+                or not any(is_likely_useful_file(file_path, lang) for lang in langs)):
                 continue
             file_content = zip_file.read(file_path).decode("utf-8")
 
-            # Skip test files based on content and files with insufficient substantive content
-            if is_test_file(file_content, lang) or not has_sufficient_content(file_content):
+            if any(is_test_file(file_content, lang) for lang in langs) or not has_sufficient_content(file_content):
                 continue
-            if lang == "python" and not keep_comments:
+            if "python" in langs and not keep_comments:
                 try:
                     file_content = remove_comments_and_docstrings(file_content)
                 except SyntaxError:
-                    # Skip files with syntax errors
                     continue
 
-            outfile.write(f"// File: {file_path}\n" if lang == "go" else f"# File: {file_path}\n")
+            comment_prefix = "// " if any(lang in ["go", "js"] for lang in langs) else "# "
+            outfile.write(f"{comment_prefix}File: {file_path}\n")
             outfile.write(file_content)
             outfile.write("\n\n")
 
 
-import argparse
-
 if __name__ == "__main__":
+
+    import argparse
+    from github2file.github2file import download_repo, process_zip_file_object
+    import logging
+    logging.basicConfig(level=logging.DEBUG)
     parser = argparse.ArgumentParser(description='Download and process files from a GitHub repository.')
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument('repo_url', type=str, nargs='?', help='The URL of the GitHub repository')
     group.add_argument('--zip_file', type=str, help='Path to the local .zip file')
-    parser.add_argument('--lang', type=str, choices=['go', 'python'], default='python', help='The programming language of the repository')
+    parser.add_argument('--lang', type=str, default='python', help='The programming language(s) of the repository (comma-separated)')
+    # parser.add_argument('--lang', type=str, choices=['go', 'python', 'js', 'html'], default='python', help='The programming language of the repository')
     parser.add_argument('--keep-comments', action='store_true', help='Keep comments and docstrings in the source code (only applicable for Python)')
     parser.add_argument('--branch_or_tag', type=str, help='The branch or tag of the repository to download', default="master")
 
-    args = parser.parse_args()
+    args = parser.parse_args('--zip_file ./synapticsage.github.io-main.zip --lang html,css'.split())
+    langs = [lang.strip() for lang in args.lang.split(',')]
 
     if args.repo_url:
-        output_file = f"{args.repo_url.split('/')[-1]}_python.txt"
-        download_repo(args.repo_url, output_file, args.lang, args.keep_comments, args.branch_or_tag)
+        output_file = f"{args.repo_url.split('/')[-1]}_{args.lang}.txt"
+        download_repo(args.repo_url, output_file, langs, args.keep_comments, args.branch_or_tag)
     else:
         output_file = f"{os.path.splitext(os.path.basename(args.zip_file))[0]}_{args.lang}.txt"
-        with zipfile.ZipFile(args.zip_file, 'r') as zip_file:
-            process_zip_file(zip_file, output_file, args.lang, args.keep_comments)
+        with zipfile.ZipFile(args.zip_file, 'r') as zf:
+            process_zip_file_object(zf, output_file, langs, args.keep_comments)
 
     print(f"Combined {args.lang.capitalize()} source code saved to {output_file}")
