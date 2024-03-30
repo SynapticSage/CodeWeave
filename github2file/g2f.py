@@ -17,7 +17,7 @@ def is_likely_useful_file(file_path, lang):
     utility_or_config_files = []
     github_workflow_or_docs = [".github", ".gitignore", "LICENSE", "README"]
 
-    if lang == "python":
+    if lang == "python" or lang == "mojo":
         excluded_dirs.append("__pycache__")
         utility_or_config_files.extend(["hubconf.py", "setup.py"])
         github_workflow_or_docs.extend(["stale.py", "gen-card-", "write_model_card"])
@@ -55,7 +55,7 @@ def is_likely_useful_file(file_path, lang):
 def is_test_file(file_content, lang):
     """Determine if the file content suggests it is a test file."""
     test_indicators = []
-    if lang == "python":
+    if lang == "python" or lang == "mojo":
         test_indicators = ["import unittest", "import pytest", "from unittest", "from pytest"]
     elif lang == "go":
         test_indicators = ["import testing", "func Test"]
@@ -129,9 +129,9 @@ def create_argument_parser():
     parser.add_argument('--lang', type=str, default='python', help='The programming language(s) of the repository (comma-separated)')
     parser.add_argument('--keep-comments', action='store_true', help='Keep comments and docstrings in the source code (only applicable for Python)')
     parser.add_argument('--branch_or_tag', type=str, help='The branch or tag of the repository to download', default="master")
+    parser.add_argument('--debug', action='store_true', help='Enable debug logging')
     parser.add_argument('repo_url', type=str, help='The URL of the GitHub repository',
                         default="", nargs='?')
-    parser.add_argument('--debug', action='store_true', help='Enable debug logging')
     return parser
 
 def main(args=None):

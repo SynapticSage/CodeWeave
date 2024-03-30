@@ -3,3 +3,4 @@ github2file/__pycache__
 .jukit
 *.txt
 *.pyc
+build/lib/github2file
