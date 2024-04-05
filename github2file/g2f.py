@@ -7,12 +7,28 @@ import ast
 import logging
 import argparse
 
-def is_file_type(file_path, file_extensions):
+file_extension_dict = {
+        'python': ['.py'],
+        'go': ['.go'],
+        'js': ['.js'],
+        'html': ['.html'],
+        'mojo': ['.mojo'],
+        'java': ['.java'],
+        'c': ['.c','.h'],
+        'cpp': ['.cpp','.h','.hpp'],
+        'csharp': ['.cs'],
+        'ruby': ['.rb'],
+        'mojo': ['.mojo'],
+}
+
+def is_file_type(file_path, file_languages:list):
     """Check if the file has any of the specified file extensions."""
-    return any(file_path.endswith(ext) for ext in file_extensions)
+    return any(file_path.endswith(ext) for file_language in file_languages
+                for ext in file_extension_dict[file_language.replace('.','')])
 
 def is_likely_useful_file(file_path, lang):
-    """Determine if the file is likely to be useful by excluding certain directories and specific file types."""
+    """Determine if the file is likely to be useful by excluding certain
+    directories and specific file types."""
     excluded_dirs = ["docs", "examples", "tests", "test", "scripts", "utils", "benchmarks"]
     utility_or_config_files = []
     github_workflow_or_docs = [".github", ".gitignore", "LICENSE", "README"]
