@@ -19,6 +19,7 @@ file_extension_dict = {
         'csharp': ['.cs'],
         'ruby': ['.rb'],
         'mojo': ['.mojo'],
+        'javascript': ['.js'],
 }
 
 def is_file_type(file_path, file_languages:list):
