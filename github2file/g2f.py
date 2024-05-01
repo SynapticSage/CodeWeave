@@ -7,9 +7,13 @@ import ast
 import logging
 import argparse
 import fnmatch
+import time
 
 file_extension_dict = {
         'python': ['.py'],
+        'py': ['.py'],
+        'ipython': ['.ipynb'],
+        'ipynb': ['.ipynb'],
         'go': ['.go'],
         'js': ['.js'],
         'html': ['.html'],
@@ -22,7 +26,7 @@ file_extension_dict = {
         'ruby': ['.rb'],
         'mojo': ['.mojo'],
         'javascript': ['.js'],
-        'markdown': ['.md'],
+        'markdown': ['.md', '.markdown', '.mdx'],
         'md': ['.md'],
         'shell': ['.sh'],
         'bash': ['.sh'],
@@ -37,10 +41,10 @@ def is_file_type(file_path, file_languages:list):
         logging.debug(f"Skipping file: {file_path}")
     return is_ft
 
-def is_likely_useful_file(file_path, lang):
+def is_likely_useful_file(file_path:str, lang:str, args:argparse.Namespace)->bool:
     """Determine if the file is likely to be useful by excluding certain
     directories and specific file types."""
-    excluded_dirs = ["docs", "examples", "tests", "test", "scripts", "utils", "benchmarks"]
+    excluded_dirs = args.excluded_dirs
     utility_or_config_files = []
     github_workflow_or_docs = [".github", ".gitignore", "LICENSE", "README"]
 
@@ -57,7 +61,8 @@ def is_likely_useful_file(file_path, lang):
     elif lang == "html":
         excluded_dirs.extend(["css", "js", "images", "fonts"])
 
-    if any(part.startswith('.') for part in file_path.split('/')):
+    if any((part.startswith('.') and not part.startswith('..') and part != '.' and part != '..')
+        for part in file_path.split('/')):
         logging.debug(f"Skipping hidden file: {file_path}")
         return False
     if 'test' in file_path.lower():
@@ -105,6 +110,17 @@ def remove_comments_and_docstrings(source):
             node.value.s = ""  # Remove comments
     return ast.unparse(tree)
 
+def extract_git_folder(folder:str)->str|None:
+    """ Extract the git folder name from the folder path 
+    We must search from the lower child folder up to the parent folder
+    looking for .git
+    """
+    while folder:
+        if '.git' in os.listdir(folder):
+            return os.path.basename(folder)
+        folder = os.path.dirname(folder)
+    return None
+
 
 def should_exclude_file(file_path, exclude_patterns):
     """Check if the file path matches any of the exclude patterns."""
@@ -139,7 +155,7 @@ def process_zip_file_object(zip_file, args):
         for file_path in zip_file.namelist():
             if (file_path.endswith("/")
                 or not is_file_type(file_path, args.lang)
-                or not any(is_likely_useful_file(file_path, lang) for lang in args.lang)
+                or not any(is_likely_useful_file(file_path, lang, args) for lang in args.lang)
                 or should_exclude_file(file_path, args.exclude)):
                 continue
 
@@ -171,7 +187,7 @@ def process_folder(args):
         for file in files:
             file_path = os.path.join(root, file)
             if (not is_file_type(file_path, args.lang)
-                or not any(is_likely_useful_file(file_path, lang) for lang in args.lang)
+                or not any(is_likely_useful_file(file_path, lang, args) for lang in args.lang)
                 or should_exclude_file(file_path, args.exclude)):
                 continue
 
@@ -208,16 +224,34 @@ def create_argument_parser():
     parser.add_argument('--debug', action='store_true', help='Enable debug logging')
     parser.add_argument('--include', type=str, help='Comma-separated list of subfolders/patterns to focus on')
     parser.add_argument('--exclude', type=str, help='Comma-separated list of file patterns to exclude')
+    parser.add_argument('--excluded_dirs', type=str, help='Comma-separated list of directories to exclude',
+                        default="docs,examples,tests,test,scripts,utils,benchmarks")
     parser.add_argument('repo_url', type=str, help='The URL of the GitHub repository',
                         default="", nargs='?')
     return parser
+
+def check_for_include_override(include_list, exclude_list):
+    """Check if any of the exclude_list are overridden by the include_list"""
+    checks = {include:(include in exclude_list) for include in include_list}
+    if any(checks.values()):
+        # pop the excluded_dirs if it is included in the include list
+        for include, value in checks.items():
+            if value:
+                logging.debug(f"Removing {include} from the exclude list")
+                exclude_list.remove(include)
 
 def main(args=None):
     parser = create_argument_parser()
     args = parser.parse_args(args)
     args.lang = [lang.strip() for lang in args.lang.split(',')]
+    if args.excluded_dirs:
+        args.excluded_dirs = [subfolder.strip() for subfolder in args.excluded_dirs.split(',')]
     if args.include:
         args.include = [subfolder.strip() for subfolder in args.include.split(',')]
+        check_for_include_override(args.include, args.exclude)
+        check_for_include_override(args.include, args.excluded_dirs)
+    else:
+        args.include = []
     if args.exclude:
         args.exclude = [pattern.strip() for pattern in args.exclude.split(',')]
     else:
@@ -229,6 +263,7 @@ def main(args=None):
         logging.basicConfig(level=logging.DEBUG)
         logging.debug("Debug logging enabled")
         logging.debug(f"Arguments: {args}")
+        input("Press Enter to continue...")
     else:
         # Enable info logging
         logging.basicConfig(level=logging.INFO)
@@ -241,13 +276,23 @@ def main(args=None):
             args.output_file = f"{os.path.splitext(os.path.basename(args.zip_file))[0]}_{','.join(args.lang)}.txt"
             process_zip_file(args)
         elif args.folder:
-            args.output_file = f"{os.path.basename(args.folder)}_{','.join(args.lang)}.txt"
+            # Find the git repo name from the folder path
+            gitfolder = extract_git_folder(args.folder)
+            check_for_include_override(args.folder.split('/'), args.exclude)
+            check_for_include_override(args.folder.split('/'), args.excluded_dirs)
+            if not gitfolder:
+                print("No git folder found in the path")
+                sys.exit(1)
+            args.output_file = f"{gitfolder}_{','.join(args.lang)}.txt"
             process_folder(args)
         else:
             parser.print_help()
             sys.exit(1)
 
-        print(f"Combined {', '.join(args.lang).capitalize()} source code saved to {args.output_file}")
+        if os.path.exists(args.output_file):
+            print(f"Combined {', '.join(args.lang).capitalize()} source code saved to {args.output_file}")
+        else:
+            print("No source code found to save -- check the input arguments")
 
     except argparse.ArgumentError as e:
         print(str(e))
