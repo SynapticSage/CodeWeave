@@ -6,6 +6,7 @@ import io
 import ast
 import logging
 import argparse
+import fnmatch
 
 file_extension_dict = {
         'python': ['.py'],
@@ -16,6 +17,7 @@ file_extension_dict = {
         'java': ['.java'],
         'c': ['.c','.h'],
         'cpp': ['.cpp','.h','.hpp'],
+        'c++': ['.cpp','.h','.hpp'],
         'csharp': ['.cs'],
         'ruby': ['.rb'],
         'mojo': ['.mojo'],
@@ -24,8 +26,11 @@ file_extension_dict = {
 
 def is_file_type(file_path, file_languages:list):
     """Check if the file has any of the specified file extensions."""
-    return any(file_path.endswith(ext) for file_language in file_languages
-                for ext in file_extension_dict[file_language.replace('.','')])
+    is_ft = any(file_path.endswith(ext) for file_language in file_languages for
+        ext in file_extension_dict[file_language.replace('.','')])
+    if not is_ft:
+        logging.debug(f"Skipping file: {file_path}")
+    return is_ft
 
 def is_likely_useful_file(file_path, lang):
     """Determine if the file is likely to be useful by excluding certain
@@ -95,47 +100,61 @@ def remove_comments_and_docstrings(source):
             node.value.s = ""  # Remove comments
     return ast.unparse(tree)
 
-def download_repo(repo_url, output_file, lang, keep_comments=False, branch_or_tag="master"):
+
+def should_exclude_file(file_path, exclude_patterns):
+    """Check if the file path matches any of the exclude patterns."""
+    answer = any(fnmatch.fnmatch(file_path, pattern) for pattern in exclude_patterns)
+    if answer:
+        logging.debug(f"Excluding file: {file_path}")
+    return answer
+
+def download_repo(args):
     """Download and process files from a GitHub repository."""
-    download_url = f"{repo_url}/archive/refs/heads/{branch_or_tag}.zip"
+    download_url = f"{args.repo_url}/archive/refs/heads/{args.branch_or_tag}.zip"
 
     print(download_url)
     response = requests.get(download_url)
 
     if response.status_code == 200:
         zip_file = zipfile.ZipFile(io.BytesIO(response.content))
-        process_zip_file_object(zip_file, output_file, lang, keep_comments)
+        process_zip_file_object(zip_file, args)
     else:
         print(f"Failed to download the repository. Status code: {response.status_code}")
         sys.exit(1)
 
-
-def process_zip_file(zip_file:str, output_file, lang, keep_comments=False):
-    """ Process files from a local .zip file. """
-    with zipfile.ZipFile(zip_file, 'r') as zip_file:
-        process_zip_file_object(zip_file, output_file, lang, keep_comments)
-
-
-def process_zip_file_object(zip_file:zipfile.ZipFile, output_file, langs, keep_comments=False):
+def process_zip_file(args):
     """Process files from a local .zip file."""
-    file_extensions = [f".{lang}" for lang in langs]
-    with open(output_file, "w", encoding="utf-8") as outfile:
+    with zipfile.ZipFile(args.zip_file, 'r') as zip_file:
+        process_zip_file_object(zip_file, args)
+
+def process_zip_file_object(zip_file, args):
+    """Process files from a local .zip file."""
+    file_extensions = [f".{lang}" for lang in args.lang]
+    with open(args.output_file, "w", encoding="utf-8") as outfile:
         for file_path in zip_file.namelist():
-            if (file_path.endswith("/") 
-                or not is_file_type(file_path, file_extensions) 
-                or not any(is_likely_useful_file(file_path, lang) for lang in langs)):
+            if (file_path.endswith("/")
+                or not is_file_type(file_path, args.lang)
+                or not any(is_likely_useful_file(file_path, lang) for lang in args.lang)
+                or should_exclude_file(file_path, args.exclude)):
                 continue
+
+            if args.include:
+                confirm = any(include in file_path for include in args.include)
+                if not confirm:
+                    logging.debug(f"Skipping file: {file_path}")
+                    continue
+
             file_content = zip_file.read(file_path).decode("utf-8")
 
-            if any(is_test_file(file_content, lang) for lang in langs) or not has_sufficient_content(file_content):
+            if any(is_test_file(file_content, lang) for lang in args.lang) or not has_sufficient_content(file_content):
                 continue
-            if "python" in langs and not keep_comments:
+            if "python" in args.lang and not args.keep_comments:
                 try:
                     file_content = remove_comments_and_docstrings(file_content)
                 except SyntaxError:
                     continue
 
-            comment_prefix = "// " if any(lang in ["go", "js"] for lang in langs) else "# "
+            comment_prefix = "// " if any(lang in ["go", "js"] for lang in args.lang) else "# "
             outfile.write(f"{comment_prefix}File: {file_path}\n")
             outfile.write(file_content)
             outfile.write("\n\n")
@@ -147,6 +166,8 @@ def create_argument_parser():
     parser.add_argument('--keep-comments', action='store_true', help='Keep comments and docstrings in the source code (only applicable for Python)')
     parser.add_argument('--branch_or_tag', type=str, help='The branch or tag of the repository to download', default="master")
     parser.add_argument('--debug', action='store_true', help='Enable debug logging')
+    parser.add_argument('--include', type=str, help='Comma-separated list of subfolders/patterns to focus on')
+    parser.add_argument('--exclude', type=str, help='Comma-separated list of file patterns to exclude')
     parser.add_argument('repo_url', type=str, help='The URL of the GitHub repository',
                         default="", nargs='?')
     return parser
@@ -155,21 +176,35 @@ def main(args=None):
     parser = create_argument_parser()
     try:
         args = parser.parse_args(args)
+
+
+        args.lang = [lang.strip() for lang in args.lang.split(',')]
+        if args.include:
+            args.include = [subfolder.strip() for subfolder in args.include.split(',')]
+        if args.exclude:
+            args.exclude = [pattern.strip() for pattern in args.exclude.split(',')]
+        else:
+            args.exclude = []
+
         if args.debug:
+            print("Debug logging enabled")
             # Enable debug logging
             logging.basicConfig(level=logging.DEBUG)
             logging.debug("Debug logging enabled")
             logging.debug(f"Arguments: {args}")
-        langs = [lang.strip() for lang in args.lang.split(',')]
-        if args.repo_url:
-            output_file = f"{args.repo_url.split('/')[-1]}_{args.lang}.txt"
-            download_repo(args.repo_url, output_file, langs, args.keep_comments, args.branch_or_tag)
         else:
-            output_file = f"{os.path.splitext(os.path.basename(args.zip_file))[0]}_{args.lang}.txt"
-            with zipfile.ZipFile(args.zip_file, 'r') as zf:
-                process_zip_file_object(zf, output_file, langs, args.keep_comments)
+            # Enable info logging
+            logging.basicConfig(level=logging.INFO)
 
-        print(f"Combined {args.lang.capitalize()} source code saved to {output_file}")
+        if args.repo_url:
+            args.output_file = f"{args.repo_url.split('/')[-1]}_{','.join(args.lang)}.txt"
+            download_repo(args)
+        else:
+            args.output_file = f"{os.path.splitext(os.path.basename(args.zip_file))[0]}_{','.join(args.lang)}.txt"
+            process_zip_file(args)
+
+        print(f"Combined {', '.join(args.lang).capitalize()} source code saved to {args.output_file}")
+
     except argparse.ArgumentError as e:
         print(str(e))
         parser.print_help()
@@ -177,3 +212,5 @@ def main(args=None):
 
 if __name__ == "__main__":
     main()
+
+
