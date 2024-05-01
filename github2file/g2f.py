@@ -22,6 +22,11 @@ file_extension_dict = {
         'ruby': ['.rb'],
         'mojo': ['.mojo'],
         'javascript': ['.js'],
+        'markdown': ['.md'],
+        'md': ['.md'],
+        'shell': ['.sh'],
+        'bash': ['.sh'],
+        'zsh': ['.sh'],
 }
 
 def is_file_type(file_path, file_languages:list):
