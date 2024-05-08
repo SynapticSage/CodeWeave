@@ -158,6 +158,8 @@ def main(args=None):
             process_zip_file(args)
         elif args.folder:
             # Find the git repo name from the folder path
+            args.folder = os.path.abspath(
+                os.path.expanduser(args.folder))
             gitfolder = extract_git_folder(args.folder)
             check_for_include_override(args.folder.split('/'), args.exclude)
             check_for_include_override(args.folder.split('/'), args.excluded_dirs)
