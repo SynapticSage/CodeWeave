@@ -8,6 +8,7 @@ import argparse
 
 from github2file.utils.path import should_exclude_file, inclusion_violate, extract_git_folder, is_test_file, is_file_type, is_likely_useful_file
 from github2file.utils.file import has_sufficient_content, remove_comments_and_docstrings
+from github2file.utils.jupyter import convert_ipynb_to_py
 
 
 def download_repo(args):
@@ -24,31 +25,35 @@ def download_repo(args):
         print(f"Failed to download the repository. Status code: {response.status_code}")
         sys.exit(1)
 
-def process_zip_file(args):
+def process_zip_file(args:argparse.Namespace):
     """Process files from a local .zip file."""
     with zipfile.ZipFile(args.zip_file, 'r') as zip_file:
         process_zip_file_object(zip_file, args)
 
-def process_zip_file_object(zip_file, args):
+def process_zip_file_object(zip_file, args:argparse.Namespace):
     """Process files from a local .zip file."""
-    file_extensions = [f".{lang}" for lang in args.lang]
     with open(args.output_file, "w", encoding="utf-8") as outfile:
         for file_path in zip_file.namelist():
             if (file_path.endswith("/")
                 or not is_file_type(file_path, args.lang)
                 or not any(is_likely_useful_file(file_path, lang, args) for lang in args.lang)
-                or should_exclude_file(file_path, args.exclude)):
+                or should_exclude_file(file_path, args)):
                 continue
 
             if args.include:
                 confirm_include = any(include in file_path for include in args.include)
-                if not confirm:
+                if not confirm_include:
                     logging.debug(f"Skipping file: {file_path}")
                     continue
+            else:
+                # Default to include
+                confirm_include = True
             if not confirm_include:
-                pass
+                continue
 
             file_content = zip_file.read(file_path).decode("utf-8")
+            if file_path.endswith('.ipynb') and args.ipynb_nbconvert:
+                file_content = convert_ipynb_to_py(file_content)
 
             if any(is_test_file(file_content, lang) for lang in args.lang) or not has_sufficient_content(file_content):
                 continue
@@ -64,17 +69,17 @@ def process_zip_file_object(zip_file, args):
             outfile.write("\n\n")
 
 
-def process_folder(args):
+def process_folder(args:argparse.Namespace):
     """Process files from a local folder."""
     for root, _, files in os.walk(args.folder):
         for file in files:
             file_path = os.path.join(root, file)
             if (not is_file_type(file_path, args.lang)
                 or not any(is_likely_useful_file(file_path, lang, args) for lang in args.lang)
-                or should_exclude_file(file_path, args)):
+                or should_exclude_file(file_path, args)
+                or inclusion_violate(file_path, args)):
                 continue
-
-            if inclusion_violate(file_path, args):
+            if any(excluded_dir in root for excluded_dir in args.excluded_dirs):
                 continue
 
             with open(file_path, 'r', encoding='utf-8') as f:
@@ -109,6 +114,7 @@ def create_argument_parser():
     parser.add_argument('repo_url', type=str, help='The URL of the GitHub repository',
                         default="", nargs='?')
     parser.add_argument('--name_append', type=str, help='Append this string to the output file name')
+    parser.add_argument('--ipynb_nbconvert', action='store_true', default=True, help='Convert IPython Notebook files to Python script files using nbconvert')
     return parser
 
 def check_for_include_override(include_list, exclude_list):
