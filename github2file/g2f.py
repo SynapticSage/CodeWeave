@@ -5,6 +5,7 @@ import zipfile
 import io
 import logging
 import argparse
+from tqdm.auto import tqdm
 
 from github2file.utils.path import should_exclude_file, inclusion_violate, extract_git_folder, is_test_file, is_file_type, is_likely_useful_file
 from github2file.utils.file import has_sufficient_content, remove_comments_and_docstrings
@@ -33,7 +34,10 @@ def process_zip_file(args:argparse.Namespace):
 def process_zip_file_object(zip_file, args:argparse.Namespace):
     """Process files from a local .zip file."""
     with open(args.output_file, "w", encoding="utf-8") as outfile:
-        for file_path in zip_file.namelist():
+        for file_path in tqdm(zip_file.namelist(), 
+                              desc="Processing files", 
+                              unit="file", 
+                              total=len(zip_file.namelist())):
             if (file_path.endswith("/")
                 or not is_file_type(file_path, args.lang)
                 or not any(is_likely_useful_file(file_path, lang, args) for lang in args.lang)
@@ -71,7 +75,10 @@ def process_zip_file_object(zip_file, args:argparse.Namespace):
 
 def process_folder(args:argparse.Namespace):
     """Process files from a local folder."""
-    for root, _, files in os.walk(args.folder):
+    for root, _, files in tqdm(os.walk(args.folder),
+                               desc="Processing folders",
+                               unit="folder",
+                               leave=False):
         for file in files:
             file_path = os.path.join(root, file)
             if (not is_file_type(file_path, args.lang)
@@ -158,10 +165,8 @@ def main(args=None):
     try:
         if args.repo_url:
             args.output_file = f"{args.repo_url.split('/')[-1]}_{','.join(args.lang)}.txt"
-            download_repo(args)
         elif args.zip_file:
             args.output_file = f"{os.path.splitext(os.path.basename(args.zip_file))[0]}_{','.join(args.lang)}.txt"
-            process_zip_file(args)
         elif args.folder:
             # Find the git repo name from the folder path
             args.folder = os.path.abspath(
@@ -176,6 +181,15 @@ def main(args=None):
                 args.output_file = f"{gitfolder}_{args.name_append}_{','.join(args.lang)}.txt"
             else:
                 args.output_file = f"{gitfolder}_{','.join(args.lang)}.txt"
+
+        if os.path.exists(args.output_file):
+            os.remove(args.output_file)
+
+        if args.repo_url:
+            download_repo(args)
+        elif args.zip_file:
+            process_zip_file(args)
+        elif args.folder:
             process_folder(args)
         else:
             parser.print_help()

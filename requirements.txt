@@ -4,3 +4,6 @@ idna==3.6
 requests==2.31.0
 tk==0.1.0
 urllib3==2.2.1
+tqdm
+nbformat
+nbconvert
