@@ -11,19 +11,23 @@ from github2file.utils.path import should_exclude_file, inclusion_violate, extra
 from github2file.utils.file import has_sufficient_content, remove_comments_and_docstrings
 from github2file.utils.jupyter import convert_ipynb_to_py
 
+def setup_logging(debug_flag):
+    """Setup logging configuration."""
+    log_level = logging.DEBUG if debug_flag else logging.INFO
+    logging.basicConfig(level=log_level, format='%(levelname)s: %(message)s')
 
 def download_repo(args):
     """Download and process files from a GitHub repository."""
     download_url = f"{args.repo_url}/archive/refs/heads/{args.branch_or_tag}.zip"
 
-    print(download_url)
+    logging.info(f"Download URL: {download_url}")
     response = requests.get(download_url)
 
     if response.status_code == 200:
         zip_file = zipfile.ZipFile(io.BytesIO(response.content))
         process_zip_file_object(zip_file, args)
     else:
-        print(f"Failed to download the repository. Status code: {response.status_code}")
+        logging.error(f"Failed to download the repository. Status code: {response.status_code}")
         sys.exit(1)
 
 def process_zip_file(args:argparse.Namespace):
@@ -72,21 +76,31 @@ def process_zip_file_object(zip_file, args:argparse.Namespace):
             outfile.write(file_content)
             outfile.write("\n\n")
 
-
 def process_folder(args:argparse.Namespace):
     """Process files from a local folder."""
+    from functools import reduce
+    from operator import ior
     for root, _, files in tqdm(os.walk(args.folder),
                                desc="Processing folders",
                                unit="folder",
                                leave=False):
+        logging.debug(f"In folder: {root}")
+        logging.debug(f"File list:\n{files}")
         for file in files:
             file_path = os.path.join(root, file)
-            if (not is_file_type(file_path, args.lang)
-                or not any(is_likely_useful_file(file_path, lang, args) for lang in args.lang)
-                or should_exclude_file(file_path, args)
-                or inclusion_violate(file_path, args)):
+            # Annotated logic for skipping files
+            we_should_examine = {
+                "bad filetype": not is_file_type(file, args.lang),
+                "not useful":   not any(is_likely_useful_file(file, lang, args) for lang in args.lang),
+                "should exclude": should_exclude_file(file, args),
+                "inclusion violate": inclusion_violate(file, args)
+            }
+            if reduce(ior, we_should_examine.values()):
+                logging.debug(f"Skipping file: {file_path}")
+                logging.debug(f"Reasons: {we_should_examine}")
                 continue
             if any(excluded_dir in root for excluded_dir in args.excluded_dirs):
+                logging.debug(f"Excluded directory, skipping {file_path}")
                 continue
 
             with open(file_path, 'r', encoding='utf-8') as f:
@@ -135,77 +149,73 @@ def check_for_include_override(include_list, exclude_list):
                 exclude_list.remove(include)
 
 def main(args=None):
+    # Parse arguments
     parser = create_argument_parser()
     args = parser.parse_args(args)
     args.lang = [lang.strip() for lang in args.lang.split(',')]
-    if args.excluded_dirs:
-        args.excluded_dirs = [subfolder.strip() for subfolder in args.excluded_dirs.split(',')]
-    if args.include:
-        args.include = [subfolder.strip() for subfolder in args.include.split(',')]
-        check_for_include_override(args.include, args.exclude)
-        check_for_include_override(args.include, args.excluded_dirs)
-    else:
-        args.include = []
-    if args.exclude:
-        args.exclude = [pattern.strip() for pattern in args.exclude.split(',')]
-    else:
-        args.exclude = []
 
-    if args.debug:
-        print("Debug logging enabled")
-        # Enable debug logging
-        logging.basicConfig(level=logging.DEBUG)
-        logging.debug("Debug logging enabled")
-        logging.debug(f"Arguments: {args}")
-        input("Press Enter to continue...")
-    else:
-        # Enable info logging
-        logging.basicConfig(level=logging.INFO)
+    # Setup logging early
+    setup_logging(args.debug)
+
+    logging.info("Starting the script")
+    logging.debug(f"Arguments: {args}")
 
     try:
+        if args.excluded_dirs:
+            args.excluded_dirs = [subfolder.strip() for subfolder in args.excluded_dirs.split(',')]
+        if args.include:
+            args.include = [subfolder.strip() for subfolder in args.include.split(',')]
+            check_for_include_override(args.include, args.exclude)
+            check_for_include_override(args.include, args.excluded_dirs)
+        else:
+            args.include = []
+        if args.exclude:
+            args.exclude = [pattern.strip() for pattern in args.exclude.split(',')]
+        else:
+            args.exclude = []
+
         if args.repo_url:
             args.output_file = f"{args.repo_url.split('/')[-1]}_{','.join(args.lang)}.txt"
         elif args.zip_file:
             args.output_file = f"{os.path.splitext(os.path.basename(args.zip_file))[0]}_{','.join(args.lang)}.txt"
         elif args.folder:
-            # Find the git repo name from the folder path
-            args.folder = os.path.abspath(
-                os.path.expanduser(args.folder))
+            args.folder = os.path.abspath(os.path.expanduser(args.folder))
             gitfolder = extract_git_folder(args.folder)
             check_for_include_override(args.folder.split('/'), args.exclude)
             check_for_include_override(args.folder.split('/'), args.excluded_dirs)
             if not gitfolder:
-                print("No git folder found in the path")
-                sys.exit(1)
+                logging.warning("No git folder found in the path")
             if args.name_append:
                 args.output_file = f"{gitfolder}_{args.name_append}_{','.join(args.lang)}.txt"
             else:
                 args.output_file = f"{gitfolder}_{','.join(args.lang)}.txt"
 
         if os.path.exists(args.output_file):
+            logging.info(f"Output file {args.output_file} already exists. Removing it.")
             os.remove(args.output_file)
 
         if args.repo_url:
+            logging.info("Downloading repository")
             download_repo(args)
         elif args.zip_file:
+            logging.info("Processing zip file")
             process_zip_file(args)
         elif args.folder:
+            logging.info("Processing folder")
             process_folder(args)
         else:
             parser.print_help()
             sys.exit(1)
 
         if os.path.exists(args.output_file):
-            print(f"Combined {', '.join(args.lang).capitalize()} source code saved to {args.output_file}")
+            logging.info(f"Combined {', '.join(args.lang).capitalize()} source code saved to {args.output_file}")
         else:
-            print("No source code found to save -- check the input arguments")
+            logging.info("No source code found to save -- check the input arguments")
 
     except argparse.ArgumentError as e:
-        print(str(e))
+        logging.error(str(e))
         parser.print_help()
         sys.exit(1)
 
 if __name__ == "__main__":
     main()
-
-
