@@ -23,10 +23,12 @@ file_extension_dict = {
         'mojo': ['.mojo'],
         'javascript': ['.js'],
         'markdown': ['.md', '.markdown', '.mdx'],
+        'matlab': ['.m'],
         'md': ['.md'],
         'shell': ['.sh'],
         'bash': ['.sh'],
         'zsh': ['.sh'],
+        'toml': ['.toml']
 }
 
 
@@ -56,7 +58,7 @@ def extract_git_folder(folder:str)->str|None:
     We must search from the lower child folder up to the parent folder
     looking for .git
     """
-    while folder:
+    if folder:
         if '.git' in os.listdir(folder):
             return os.path.basename(folder)
         folder = os.path.dirname(folder)
@@ -86,6 +88,8 @@ def is_likely_useful_file(file_path:str, lang:str, args:argparse.Namespace)->boo
     excluded_dirs = args.excluded_dirs
     utility_or_config_files = []
     github_workflow_or_docs = [".github", ".gitignore", "LICENSE", "README"]
+    # if file_path.endswith(".py"):
+    #     import pdb; pdb.set_trace()
 
     if lang == "python" or lang == "mojo":
         excluded_dirs.append("__pycache__")
