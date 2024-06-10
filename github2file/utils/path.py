@@ -31,6 +31,10 @@ file_extension_dict = {
         'toml': ['.toml']
 }
 
+def lookup_file_extension(file_path:str)->list[str]:
+    """Lookup the file extension of a file_path and return list of valid keys of
+    file_extension_dict"""
+    return [key for key, value in file_extension_dict.items() if any(file_path.endswith(ext) for ext in value)]
 
 def should_exclude_file(file_path, args):
     """Check if the file path matches any of the exclude patterns."""

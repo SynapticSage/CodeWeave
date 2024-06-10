@@ -7,7 +7,7 @@ import logging
 import argparse
 from tqdm.auto import tqdm
 
-from github2file.utils.path import should_exclude_file, inclusion_violate, extract_git_folder, is_test_file, is_file_type, is_likely_useful_file
+from github2file.utils.path import should_exclude_file, inclusion_violate, extract_git_folder, is_test_file, is_file_type, is_likely_useful_file, lookup_file_extension
 from github2file.utils.file import has_sufficient_content, remove_comments_and_docstrings
 from github2file.utils.jupyter import convert_ipynb_to_py
 
@@ -86,6 +86,8 @@ def process_folder(args:argparse.Namespace):
                                leave=False):
         logging.debug(f"In folder: {root}")
         logging.debug(f"File list:\n{files}")
+        if files == ['sampleWrapperScript.m', 'exportTrodesRecsAsOne.m']:
+            import pdb; pdb.set_trace()
         for file in files:
             file_path = os.path.join(root, file)
             # Annotated logic for skipping files
@@ -107,12 +109,17 @@ def process_folder(args:argparse.Namespace):
                 file_content = f.read()
 
             if any(is_test_file(file_content, lang) for lang in args.lang) or not has_sufficient_content(file_content):
+                logging.debug(f"Skipping file: {file_path}")
+                logging.debug(f"Reason: Test file or insufficient content")
                 continue
             if "python" in args.lang and not args.keep_comments:
-                try:
-                    file_content = remove_comments_and_docstrings(file_content)
-                except SyntaxError:
-                    continue
+                extension_keys = lookup_file_extension(file_path)
+                if "python" in extension_keys:
+                    try:
+                        file_content = remove_comments_and_docstrings(file_content)
+                    except SyntaxError:
+                        logging.debug(f"Tried to remove comments and docstrings from {file_path} but failed")
+                        logging.debug(f"Reason: Syntax error")
 
             with open(args.output_file, 'a', encoding='utf-8') as outfile:
                 comment_prefix = "// " if any(lang in ["go", "js"] for lang in args.lang) else "# "
