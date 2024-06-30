@@ -1,59 +1,97 @@
-# GitHub Repository to File Converter
+# GitHub2File
 
-This Python script allows you to download and process files from a GitHub repository, making it easier to share code with chatbots that have large context capabilities but don't automatically download code from GitHub.
+GitHub2File is a tool to download and process files from a GitHub repository, extracting and combining source code or other relevant files into a single output file.
 
 ## Features
 
 - Download and process files from a GitHub repository.
-- Support for both public and private repositories.
-- Filter files based on programming language (Python or Go).
-- Exclude certain directories, file types, and test files.
-- Remove comments and docstrings from Python source code (optional).
-- Specify a branch or tag to download from (default: "master").
+- Process local zip files and directories.
+- Filter files by programming language.
+- Include or exclude specific directories and files.
+- Convert IPython notebooks to Python scripts.
+- Remove comments and docstrings from Python files.
+- Optionally copy the output to the clipboard (MacOS only).
 
 ## Installation
-Clone the repository and install the package using:
+
+To install the package, run:
+
 ```bash
 pip install .
 ```
 
 ## Usage
-`github2file` can be executed from the command line with several options:
 
-### Command Syntax
+You can use GitHub2File either by downloading a repository directly from GitHub, processing a local zip file, or processing a local directory. Here are the different ways to call the script:
+
+### Download and Process a GitHub Repository
+
 ```bash
-python g2f.py [options] <repository_url>
+python -m github2file --repo_url <repository_url> [options]
+```
+
+### Process a Local Zip File
+
+```bash
+python -m github2file --zip_file <path_to_zip_file> [options]
+```
+
+### Process a Local Directory
+
+```bash
+python -m github2file --folder <path_to_folder> [options]
 ```
 
 ### Options
-- `<repository_url>`: URL of the GitHub repository (required positional argument).
-- `--zip_file <path>`: Path to a local zip file to process.
-- `--folder <path>`: Path to a local folder to process.
-- `--lang <languages>`: Specify the programming languages as a comma-separated list. Defaults to `python`.
-- `--keep-comments`: Keep comments and docstrings in Python files.
-- `--branch_or_tag <name>`: Download from a specific branch or tag. Defaults to `master`.
-- `--debug`: Enable debug logging for more verbose output.
-- `--include <patterns>`: Include files or directories matching these comma-separated patterns.
-- `--exclude <patterns>`: Exclude files or directories matching these comma-separated patterns.
-- `--excluded_dirs <dirs>`: Directories to exclude by default (e.g., `docs,examples,tests`).
-- `--name_append <string>`: Append a custom string to the output file name.
-- `--ipynb_nbconvert`: Convert Jupyter notebooks to Python scripts. Enabled by default.
 
-## Examples
+- `--repo_url`: The URL of the GitHub repository to download.
+- `--zip_file`: Path to the local zip file.
+- `--folder`: Path to the local folder.
+- `--lang`: The programming language(s) of the repository (comma-separated). Default is `python`.
+- `--keep-comments`: Keep comments and docstrings in the source code (only applicable for Python).
+- `--branch_or_tag`: The branch or tag of the repository to download. Default is `master`.
+- `--debug`: Enable debug logging.
+- `--include`: Comma-separated list of subfolders/patterns to focus on.
+- `--exclude`: Comma-separated list of file patterns to exclude.
+- `--excluded_dirs`: Comma-separated list of directories to exclude. Default is `docs,examples,tests,test,scripts,utils,benchmarks`.
+- `--name_append`: Append this string to the output file name.
+- `--ipynb_nbconvert`: Convert IPython Notebook files to Python script files using nbconvert. Default is `True`.
+- `--pbcopy`: Copy the output to the clipboard. Default is `False`.
 
-### Downloading and Processing from a GitHub Repository
+### Example Usage
+
+#### Download and Process a GitHub Repository
+
 ```bash
-python g2f.py --lang py,ipynb,md --exclude_dirs test,docs https://github.com/huggingface/transformers
-```
-dumps all python, ipnb, and markdown files, excluding the test and docs folder
-
-### Processing a Local Zip File
-```bash
-python g2f.py --zip_file path/to/file.zip --lang py --keep-comments
+python -m github2file --repo_url https://github.com/user/repo --lang python,markdown --pbcopy --excluded_dirs env
 ```
 
-For further information and help with command-line arguments:
+or 
+
 ```bash
-python g2f.py -h
+python -m github2file --lang python,markdown --pbcopy --excluded_dirs env https://github.com/user/repo 
 ```
+#### Process a Local Zip File
+
+```bash
+python -m github2file --zip_file /path/to/repo.zip --lang python --include src,lib --exclude test --keep-comments
+```
+
+#### Process a Local Directory
+
+```bash
+python -m github2file --folder /path/to/repo --lang python --excluded_dirs env,docs
+```
+
+### Advanced Usage
+
+You can combine multiple options to fine-tune the processing:
+
+```bash
+python -m github2file --folder /path/to/repo --lang python --keep-comments --include src,lib --name_append processed --debug --pbcopy
+```
+
+## Contributing
+
+If you want to contribute to this project, please fork the repository and create a pull request.
 
