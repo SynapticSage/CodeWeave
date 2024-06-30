@@ -15,6 +15,7 @@ file_extension_dict = {
         'html': ['.html'],
         'mojo': ['.mojo'],
         'java': ['.java'],
+        'lua': ['.lua'],
         'c': ['.c','.h'],
         'cpp': ['.cpp','.h','.hpp'],
         'c++': ['.cpp','.h','.hpp'],

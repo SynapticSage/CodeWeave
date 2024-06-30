@@ -4,3 +4,5 @@ github2file/__pycache__
 *.txt
 *.pyc
 build/lib/github2file
+github2file/.DS_Store
+.DS_Store

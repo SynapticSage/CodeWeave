@@ -143,6 +143,7 @@ def create_argument_parser():
                         default="", nargs='?')
     parser.add_argument('--name_append', type=str, help='Append this string to the output file name')
     parser.add_argument('--ipynb_nbconvert', action='store_true', default=True, help='Convert IPython Notebook files to Python script files using nbconvert')
+    parser.add_argument('--pbcopy', action='store_true', default=False, help='pbcopy the output to clipboard')
     return parser
 
 def check_for_include_override(include_list, exclude_list):
@@ -218,6 +219,9 @@ def main(args=None):
             logging.info(f"Combined {', '.join(args.lang).capitalize()} source code saved to {args.output_file}")
         else:
             logging.info("No source code found to save -- check the input arguments")
+
+        if args.pbcopy:
+            os.system(f'cat {args.output_file} | pbcopy')
 
     except argparse.ArgumentError as e:
         logging.error(str(e))
