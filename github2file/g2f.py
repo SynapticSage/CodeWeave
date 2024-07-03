@@ -6,6 +6,7 @@ import io
 import logging
 import argparse
 from tqdm.auto import tqdm
+from pdfminer.high_level import extract_text
 
 from github2file.utils.path import should_exclude_file, inclusion_violate, extract_git_folder, is_test_file, is_file_type, is_likely_useful_file, lookup_file_extension
 from github2file.utils.file import has_sufficient_content, remove_comments_and_docstrings
@@ -60,7 +61,9 @@ def process_zip_file_object(zip_file, args:argparse.Namespace):
                 continue
 
             file_content = zip_file.read(file_path).decode("utf-8")
-            if file_path.endswith('.ipynb') and args.ipynb_nbconvert:
+            if file_path.endswith('.pdf') and 'pdf' in args.format:
+                file_content = extract_text(io.BytesIO(zip_file.read(file_path)))
+            elif file_path.endswith('.ipynb') and args.ipynb_nbconvert:
                 file_content = convert_ipynb_to_py(file_content)
 
             if any(is_test_file(file_content, lang) for lang in args.lang) or not has_sufficient_content(file_content):
@@ -105,7 +108,10 @@ def process_folder(args:argparse.Namespace):
                 logging.debug(f"Excluded directory, skipping {file_path}")
                 continue
 
-            with open(file_path, 'r', encoding='utf-8') as f:
+            if file_path.endswith('.pdf') and 'pdf' in args.format:
+                file_content = extract_text(file_path)
+            else:
+                with open(file_path, 'r', encoding='utf-8') as f:
                 file_content = f.read()
 
             if any(is_test_file(file_content, lang) for lang in args.lang) or not has_sufficient_content(file_content):
@@ -133,6 +139,7 @@ def create_argument_parser():
     parser.add_argument('--folder', type=str, help='Path to the local folder')
     parser.add_argument('--lang', type=str, default='python', help='The programming language(s) of the repository (comma-separated)')
     parser.add_argument('--keep-comments', action='store_true', help='Keep comments and docstrings in the source code (only applicable for Python)')
+    parser.add_argument('--format', type=str, default='python', help='The format of the files to process (comma-separated, e.g., python,pdf)')
     parser.add_argument('--branch_or_tag', type=str, help='The branch or tag of the repository to download', default="master")
     parser.add_argument('--debug', action='store_true', help='Enable debug logging')
     parser.add_argument('--include', type=str, help='Comma-separated list of subfolders/patterns to focus on')
@@ -161,6 +168,7 @@ def main(args=None):
     parser = create_argument_parser()
     args = parser.parse_args(args)
     args.lang = [lang.strip() for lang in args.lang.split(',')]
+    args.format = [fmt.strip() for fmt in args.format.split(',')]
 
     # Setup logging early
     setup_logging(args.debug)
