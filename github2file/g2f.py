@@ -112,7 +112,7 @@ def process_folder(args:argparse.Namespace):
                 file_content = extract_text(file_path)
             else:
                 with open(file_path, 'r', encoding='utf-8') as f:
-                file_content = f.read()
+                    file_content = f.read()
 
             if any(is_test_file(file_content, lang) for lang in args.lang) or not has_sufficient_content(file_content):
                 logging.debug(f"Skipping file: {file_path}")
