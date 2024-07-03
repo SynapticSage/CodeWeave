@@ -6,3 +6,6 @@ github2file/__pycache__
 build/lib/github2file
 github2file/.DS_Store
 .DS_Store
+.aider*
+outputs/
+test/test.pdf

@@ -17,7 +17,7 @@ def setup_logging(debug_flag):
     log_level = logging.DEBUG if debug_flag else logging.INFO
     logging.basicConfig(level=log_level, format='%(levelname)s: %(message)s')
 
-def download_repo(args):
+def download_repo(args, output_file_path):
     """Download and process files from a GitHub repository."""
     download_url = f"{args.repo_url}/archive/refs/heads/{args.branch_or_tag}.zip"
 
@@ -26,7 +26,7 @@ def download_repo(args):
 
     if response.status_code == 200:
         zip_file = zipfile.ZipFile(io.BytesIO(response.content))
-        process_zip_file_object(zip_file, args)
+        process_zip_file_object(zip_file, args, output_file_path)
     else:
         logging.error(f"Failed to download the repository. Status code: {response.status_code}")
         sys.exit(1)
@@ -36,16 +36,19 @@ def process_zip_file(args:argparse.Namespace):
     with zipfile.ZipFile(args.zip_file, 'r') as zip_file:
         process_zip_file_object(zip_file, args)
 
-def process_zip_file_object(zip_file, args:argparse.Namespace):
+def process_zip_file_object(zip_file, args:argparse.Namespace, output_file_path):
     """Process files from a local .zip file."""
-    with open(args.output_file, "w", encoding="utf-8") as outfile:
+    output_dir = "outputs"
+    os.makedirs(output_dir, exist_ok=True)
+    output_file_path = os.path.join(output_dir, args.output_file)
+    with open(output_file_path, "w", encoding="utf-8") as outfile:
         for file_path in tqdm(zip_file.namelist(), 
                               desc="Processing files", 
                               unit="file", 
                               total=len(zip_file.namelist())):
             if (file_path.endswith("/")
                 or not is_file_type(file_path, args.lang)
-                or not any(is_likely_useful_file(file_path, lang, args) for lang in args.lang)
+                or not is_likely_useful_file(file_path, args.lang, args)
                 or should_exclude_file(file_path, args)):
                 continue
 
@@ -61,7 +64,8 @@ def process_zip_file_object(zip_file, args:argparse.Namespace):
                 continue
 
             file_content = zip_file.read(file_path).decode("utf-8")
-            if file_path.endswith('.pdf') and 'pdf' in args.format:
+            logging.debug(f"Processing file: {file_path}")
+            if file_path.endswith('.pdf') and 'pdf' in args.lang:
                 file_content = extract_text(io.BytesIO(zip_file.read(file_path)))
             elif file_path.endswith('.ipynb') and args.ipynb_nbconvert:
                 file_content = convert_ipynb_to_py(file_content)
@@ -79,7 +83,7 @@ def process_zip_file_object(zip_file, args:argparse.Namespace):
             outfile.write(file_content)
             outfile.write("\n\n")
 
-def process_folder(args:argparse.Namespace):
+def process_folder(args:argparse.Namespace, output_file_path):
     """Process files from a local folder."""
     from functools import reduce
     from operator import ior
@@ -89,8 +93,6 @@ def process_folder(args:argparse.Namespace):
                                leave=False):
         logging.debug(f"In folder: {root}")
         logging.debug(f"File list:\n{files}")
-        if files == ['sampleWrapperScript.m', 'exportTrodesRecsAsOne.m']:
-            import pdb; pdb.set_trace()
         for file in files:
             file_path = os.path.join(root, file)
             # Annotated logic for skipping files
@@ -103,12 +105,14 @@ def process_folder(args:argparse.Namespace):
             if reduce(ior, we_should_examine.values()):
                 logging.debug(f"Skipping file: {file_path}")
                 logging.debug(f"Reasons: {we_should_examine}")
+                logging.debug(f"Skipping file: {file_path}")
+                logging.debug(f"Reasons: {we_should_examine}")
                 continue
             if any(excluded_dir in root for excluded_dir in args.excluded_dirs):
                 logging.debug(f"Excluded directory, skipping {file_path}")
                 continue
 
-            if file_path.endswith('.pdf') and 'pdf' in args.format:
+            if file_path.endswith('.pdf') and 'pdf' in args.lang:
                 file_content = extract_text(file_path)
             else:
                 with open(file_path, 'r', encoding='utf-8') as f:
@@ -127,7 +131,7 @@ def process_folder(args:argparse.Namespace):
                         logging.debug(f"Tried to remove comments and docstrings from {file_path} but failed")
                         logging.debug(f"Reason: Syntax error")
 
-            with open(args.output_file, 'a', encoding='utf-8') as outfile:
+            with open(output_file_path, 'a', encoding='utf-8') as outfile:
                 comment_prefix = "// " if any(lang in ["go", "js"] for lang in args.lang) else "# "
                 outfile.write(f"{comment_prefix}File: {file_path}\n")
                 outfile.write(file_content)
@@ -137,9 +141,8 @@ def create_argument_parser():
     parser = argparse.ArgumentParser(description='Download and process files from a GitHub repository.')
     parser.add_argument('--zip_file', type=str, help='Path to the local .zip file')
     parser.add_argument('--folder', type=str, help='Path to the local folder')
-    parser.add_argument('--lang', type=str, default='python', help='The programming language(s) of the repository (comma-separated)')
+    parser.add_argument('--lang', type=str, default='python', help='The programming language(s) and format(s) of the repository (comma-separated, e.g., python,pdf)')
     parser.add_argument('--keep-comments', action='store_true', help='Keep comments and docstrings in the source code (only applicable for Python)')
-    parser.add_argument('--format', type=str, default='python', help='The format of the files to process (comma-separated, e.g., python,pdf)')
     parser.add_argument('--branch_or_tag', type=str, help='The branch or tag of the repository to download', default="master")
     parser.add_argument('--debug', action='store_true', help='Enable debug logging')
     parser.add_argument('--include', type=str, help='Comma-separated list of subfolders/patterns to focus on')
@@ -163,12 +166,11 @@ def check_for_include_override(include_list, exclude_list):
                 logging.debug(f"Removing {include} from the exclude list")
                 exclude_list.remove(include)
 
-def main(args=None):
+def main(args=None)->str:
     # Parse arguments
     parser = create_argument_parser()
     args = parser.parse_args(args)
     args.lang = [lang.strip() for lang in args.lang.split(',')]
-    args.format = [fmt.strip() for fmt in args.format.split(',')]
 
     # Setup logging early
     setup_logging(args.debug)
@@ -206,30 +208,36 @@ def main(args=None):
             else:
                 args.output_file = f"{gitfolder}_{','.join(args.lang)}.txt"
 
-        if os.path.exists(args.output_file):
-            logging.info(f"Output file {args.output_file} already exists. Removing it.")
-            os.remove(args.output_file)
+        output_dir = "outputs"
+        os.makedirs(output_dir, exist_ok=True)
+        output_file_path = os.path.join(output_dir, args.output_file)
+
+        if os.path.exists(output_file_path):
+            logging.info(f"Output file {output_file_path} already exists. Removing it.")
+            os.remove(output_file_path)
 
         if args.repo_url:
             logging.info("Downloading repository")
-            download_repo(args)
+            download_repo(args, output_file_path)
         elif args.zip_file:
             logging.info("Processing zip file")
             process_zip_file(args)
         elif args.folder:
             logging.info("Processing folder")
-            process_folder(args)
+            process_folder(args, output_file_path)
         else:
             parser.print_help()
             sys.exit(1)
 
-        if os.path.exists(args.output_file):
-            logging.info(f"Combined {', '.join(args.lang).capitalize()} source code saved to {args.output_file}")
+        if os.path.exists(output_file_path):
+            logging.info(f"Combined {', '.join(args.lang).capitalize()} source code saved to {output_file_path}")
         else:
             logging.info("No source code found to save -- check the input arguments")
 
         if args.pbcopy:
             os.system(f'cat {args.output_file} | pbcopy')
+
+        return output_file_path
 
     except argparse.ArgumentError as e:
         logging.error(str(e))

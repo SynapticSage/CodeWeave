@@ -29,7 +29,8 @@ file_extension_dict = {
         'shell': ['.sh'],
         'bash': ['.sh'],
         'zsh': ['.sh'],
-        'toml': ['.toml']
+        'toml': ['.toml'],
+        'pdf': ['.pdf']
 }
 
 def lookup_file_extension(file_path:str)->list[str]:
@@ -82,7 +83,7 @@ def is_test_file(file_content, lang):
 def is_file_type(file_path, file_languages:list):
     """Check if the file has any of the specified file extensions."""
     is_ft = any(file_path.endswith(ext) for file_language in file_languages for
-        ext in file_extension_dict[file_language.replace('.','')])
+        ext in file_extension_dict.get(file_language.replace('.',''), []))
     if not is_ft:
         logging.debug(f"Skipping file: {file_path}")
     return is_ft
@@ -113,7 +114,7 @@ def is_likely_useful_file(file_path:str, lang:str, args:argparse.Namespace)->boo
         for part in file_path.split('/')):
         logging.debug(f"Skipping hidden file: {file_path}")
         return False
-    if 'test' in file_path.lower():
+    if 'test' in file_path.lower() and isinstance(args.folder, str) and 'test' not in args.folder:
         logging.debug(f"Skipping test file: {file_path}")
         return False
     for excluded_dir in excluded_dirs:
