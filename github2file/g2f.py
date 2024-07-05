@@ -8,7 +8,7 @@ import argparse
 from tqdm.auto import tqdm
 from pdfminer.high_level import extract_text
 
-from github2file.utils.path import should_exclude_file, inclusion_violate, extract_git_folder, is_test_file, is_file_type, is_likely_useful_file, lookup_file_extension, add_new_language, file_extension_dict
+from github2file.utils.path import should_exclude_file, inclusion_violate, extract_git_folder, is_test_file, is_file_type, is_likely_useful_file, lookup_file_extension, file_extension_dict
 from github2file.utils.file import has_sufficient_content, remove_comments_and_docstrings
 from github2file.utils.jupyter import convert_ipynb_to_py
 
@@ -38,9 +38,6 @@ def process_zip_file(args:argparse.Namespace):
 
 def process_zip_file_object(zip_file, args:argparse.Namespace, output_file_path):
     """Process files from a local .zip file."""
-    output_dir = "outputs"
-    os.makedirs(output_dir, exist_ok=True)
-    output_file_path = os.path.join(output_dir, args.output_file)
     with open(output_file_path, "w", encoding="utf-8") as outfile:
         for file_path in tqdm(zip_file.namelist(), 
                               desc="Processing files", 
@@ -244,7 +241,8 @@ def main(args=None) -> str:
             logging.info("No source code found to save -- check the input arguments")
 
         if args.pbcopy:
-            os.system(f'cat {args.output_file} | pbcopy')
+            print(f"Copying the output to the clipboard {output_file_path} at {os.getcwd()}")
+            os.system(f'cat "{args.output_file}" | pbcopy')
 
         return output_file_path
 
