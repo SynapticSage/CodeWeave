@@ -8,7 +8,7 @@ import argparse
 from tqdm.auto import tqdm
 from pdfminer.high_level import extract_text
 
-from github2file.utils.path import should_exclude_file, inclusion_violate, extract_git_folder, is_test_file, is_file_type, is_likely_useful_file, lookup_file_extension
+from github2file.utils.path import should_exclude_file, inclusion_violate, extract_git_folder, is_test_file, is_file_type, is_likely_useful_file, lookup_file_extension, add_new_language
 from github2file.utils.file import has_sufficient_content, remove_comments_and_docstrings
 from github2file.utils.jupyter import convert_ipynb_to_py
 
@@ -166,11 +166,18 @@ def check_for_include_override(include_list, exclude_list):
                 logging.debug(f"Removing {include} from the exclude list")
                 exclude_list.remove(include)
 
-def main(args=None)->str:
+def main(args=None) -> str:
+    def add_new_languages(languages):
+        for lang in languages:
+            if lang not in file_extension_dict:
+                file_extension_dict[lang] = [f'.{lang}']
     # Parse arguments
     parser = create_argument_parser()
     args = parser.parse_args(args)
     args.lang = [lang.strip() for lang in args.lang.split(',')]
+
+    # Add new languages if not in the dictionary
+    add_new_languages(args.lang)
 
     # Setup logging early
     setup_logging(args.debug)
