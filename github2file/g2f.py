@@ -158,7 +158,8 @@ def create_argument_parser():
 
 def check_for_include_override(include_list, exclude_list):
     """Check if any of the exclude_list are overridden by the include_list"""
-    checks = {include:(include in exclude_list) for include in include_list}
+    exclude_list = exclude_list or []
+    checks = {include: (include in exclude_list) for include in include_list}
     if any(checks.values()):
         # pop the excluded_dirs if it is included in the include list
         for include, value in checks.items():
