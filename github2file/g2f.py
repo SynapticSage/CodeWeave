@@ -8,7 +8,7 @@ import argparse
 from tqdm.auto import tqdm
 from pdfminer.high_level import extract_text
 
-from github2file.utils.path import should_exclude_file, inclusion_violate, extract_git_folder, is_test_file, is_file_type, is_likely_useful_file, lookup_file_extension, add_new_language
+from github2file.utils.path import should_exclude_file, inclusion_violate, extract_git_folder, is_test_file, is_file_type, is_likely_useful_file, lookup_file_extension, add_new_language, file_extension_dict
 from github2file.utils.file import has_sufficient_content, remove_comments_and_docstrings
 from github2file.utils.jupyter import convert_ipynb_to_py
 
