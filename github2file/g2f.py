@@ -167,17 +167,18 @@ def check_for_include_override(include_list, exclude_list):
                 exclude_list.remove(include)
 
 def main(args=None) -> str:
-    def add_new_languages(languages):
-        for lang in languages:
-            if lang not in file_extension_dict:
-                file_extension_dict[lang] = [f'.{lang}']
     # Parse arguments
     parser = create_argument_parser()
     args = parser.parse_args(args)
     args.lang = [lang.strip() for lang in args.lang.split(',')]
 
     # Add new languages if not in the dictionary
-    add_new_languages(args.lang)
+    def add_new_extension(languages):
+        for lang in languages:
+            if lang not in file_extension_dict:
+                logging.info("Adding new extension to the dictionary")
+                file_extension_dict[lang] = [f'.{lang}']
+    add_new_extension(args.lang)
 
     # Setup logging early
     setup_logging(args.debug)
