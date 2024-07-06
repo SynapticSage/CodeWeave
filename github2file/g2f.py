@@ -242,7 +242,7 @@ def main(args=None) -> str:
 
         if args.pbcopy:
             print(f"Copying the output to the clipboard {output_file_path} at {os.getcwd()}")
-            os.system(f'cat "{args.output_file}" | pbcopy')
+            os.system(f'cat "{output_file_path}" | pbcopy')
 
         return output_file_path
 
