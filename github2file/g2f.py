@@ -19,30 +19,30 @@ def setup_logging(debug_flag):
 
 def download_repo(args, output_file_path):
     """Download and process files from a GitHub repository."""
-    download_url = f"{args.repo_url}/archive/refs/heads/{args.branch_or_tag}.zip"
+    download_url = f"{args.repo}/archive/refs/heads/{args.branch_or_tag}.zip"
 
     logging.info(f"Download URL: {download_url}")
     response = requests.get(download_url)
 
     if response.status_code == 200:
-        zip_file = zipfile.ZipFile(io.BytesIO(response.content))
-        process_zip_file_object(zip_file, args, output_file_path)
+        zip = zipfile.ZipFile(io.BytesIO(response.content))
+        process_zip_object(zip, args, output_file_path)
     else:
         logging.error(f"Failed to download the repository. Status code: {response.status_code}")
         sys.exit(1)
 
-def process_zip_file(args:argparse.Namespace):
+def process_zip(args:argparse.Namespace):
     """Process files from a local .zip file."""
-    with zipfile.ZipFile(args.zip_file, 'r') as zip_file:
-        process_zip_file_object(zip_file, args)
+    with zipfile.ZipFile(args.zip, 'r') as zip:
+        process_zip_object(zip, args)
 
-def process_zip_file_object(zip_file, args:argparse.Namespace, output_file_path):
+def process_zip_object(zip, args:argparse.Namespace, output_file_path):
     """Process files from a local .zip file."""
     with open(output_file_path, "w", encoding="utf-8") as outfile:
-        for file_path in tqdm(zip_file.namelist(), 
+        for file_path in tqdm(zip.namelist(), 
                               desc="Processing files", 
                               unit="file", 
-                              total=len(zip_file.namelist())):
+                              total=len(zip.namelist())):
             if (file_path.endswith("/")
                 or not is_file_type(file_path, args.lang)
                 or not is_likely_useful_file(file_path, args.lang, args)
@@ -60,10 +60,10 @@ def process_zip_file_object(zip_file, args:argparse.Namespace, output_file_path)
             if not confirm_include:
                 continue
 
-            file_content = zip_file.read(file_path).decode("utf-8")
+            file_content = zip.read(file_path).decode("utf-8")
             logging.debug(f"Processing file: {file_path}")
             if file_path.endswith('.pdf') and 'pdf' in args.lang:
-                file_content = extract_text(io.BytesIO(zip_file.read(file_path)))
+                file_content = extract_text(io.BytesIO(zip.read(file_path)))
             elif file_path.endswith('.ipynb') and args.ipynb_nbconvert:
                 file_content = convert_ipynb_to_py(file_content)
 
@@ -136,7 +136,7 @@ def process_folder(args:argparse.Namespace, output_file_path):
 
 def create_argument_parser():
     parser = argparse.ArgumentParser(description='Download and process files from a GitHub repository.')
-    parser.add_argument('--zip_file', type=str, help='Path to the local .zip file')
+    parser.add_argument('--zip', type=str, help='Path to the local .zip file')
     parser.add_argument('--folder', type=str, help='Path to the local folder')
     parser.add_argument('--lang', type=str, default='python', help='The programming language(s) and format(s) of the repository (comma-separated, e.g., python,pdf)')
     parser.add_argument('--keep-comments', action='store_true', help='Keep comments and docstrings in the source code (only applicable for Python)')
@@ -146,12 +146,23 @@ def create_argument_parser():
     parser.add_argument('--exclude', type=str, help='Comma-separated list of file patterns to exclude')
     parser.add_argument('--excluded_dirs', type=str, help='Comma-separated list of directories to exclude',
                         default="docs,examples,tests,test,scripts,utils,benchmarks")
-    parser.add_argument('repo_url', type=str, help='The URL of the GitHub repository',
-                        default="", nargs='?')
     parser.add_argument('--name_append', type=str, help='Append this string to the output file name')
     parser.add_argument('--ipynb_nbconvert', action='store_true', default=True, help='Convert IPython Notebook files to Python script files using nbconvert')
     parser.add_argument('--pbcopy', action='store_true', default=False, help='pbcopy the output to clipboard')
+    parser.add_argument('--repo', type=str, help='The name of the GitHub repository')
+    parser.add_argument('input', type=str, help='A GitHub repository URL, a local .zip file, or a local folder',
+                        default="", nargs='?')
     return parser
+
+
+def determine_if_url_zip_or_folder(args):
+    """Determine if the input is a URL, a .zip file, or a folder."""
+    if args.input.startswith("http") and "://" in args.input:
+        args.repo = args.input
+    elif args.input.endswith(".zip"):
+        args.zip = args.input
+    else:
+        args.folder = args.input
 
 def check_for_include_override(include_list, exclude_list):
     """Check if any of the exclude_list are overridden by the include_list"""
@@ -198,10 +209,10 @@ def main(args=None) -> str:
         else:
             args.exclude = []
 
-        if args.repo_url:
-            args.output_file = f"{args.repo_url.split('/')[-1]}_{','.join(args.lang)}.txt"
-        elif args.zip_file:
-            args.output_file = f"{os.path.splitext(os.path.basename(args.zip_file))[0]}_{','.join(args.lang)}.txt"
+        if args.repo:
+            args.output_file = f"{args.repo.split('/')[-1]}_{','.join(args.lang)}.txt"
+        elif args.zip:
+            args.output_file = f"{os.path.splitext(os.path.basename(args.zip))[0]}_{','.join(args.lang)}.txt"
         elif args.folder:
             args.folder = os.path.abspath(os.path.expanduser(args.folder))
             gitfolder = extract_git_folder(args.folder)
@@ -214,6 +225,9 @@ def main(args=None) -> str:
             else:
                 args.output_file = f"{gitfolder}_{','.join(args.lang)}.txt"
 
+        # TODO: default to placing file where the command is run
+        # have a special flag that either creates and output folder or 
+        # places into the output folder located inside the g2f parent
         output_dir = "outputs"
         os.makedirs(output_dir, exist_ok=True)
         output_file_path = os.path.join(output_dir, args.output_file)
@@ -222,12 +236,12 @@ def main(args=None) -> str:
             logging.info(f"Output file {output_file_path} already exists. Removing it.")
             os.remove(output_file_path)
 
-        if args.repo_url:
+        if args.repo:
             logging.info("Downloading repository")
             download_repo(args, output_file_path)
-        elif args.zip_file:
+        elif args.zip:
             logging.info("Processing zip file")
-            process_zip_file(args)
+            process_zip(args)
         elif args.folder:
             logging.info("Processing folder")
             process_folder(args, output_file_path)

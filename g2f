@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+g2f_path=$(which g2f)
+g2f_path=$(readlink -f "$g2f_path")
+script_location=$(dirname "${g2f_path}")
+echo "script location = $script_location"
+source "${script_location}/env/bin/activate"
+which python
+python -m github2file "$@"
