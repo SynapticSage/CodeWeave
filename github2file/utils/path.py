@@ -80,8 +80,15 @@ def is_test_file(file_content, lang):
         test_indicators = ["describe(", "it(", "test(", "expect(", "jest", "mocha"]
     return any(indicator in file_content for indicator in test_indicators)
 
-def is_file_type(file_path, file_languages:list):
-    """Check if the file has any of the specified file extensions."""
+def is_file_type(file_path, file_languages:list|set):
+    """
+    Check if the file has any of the specified file extensions.
+
+    Special behavior: If file_languages is a set, then we add the file extension.
+    This occurs when --lang is not passed to the script.
+    """
+    if isinstance(file_languages, set):
+        file_languages += os.path.splitext(file_path)[1][1:]
     is_ft = any(file_path.endswith(ext) for file_language in file_languages for
         ext in file_extension_dict.get(file_language.replace('.',''), []))
     if not is_ft:

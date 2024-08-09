@@ -138,7 +138,8 @@ def create_argument_parser():
     parser = argparse.ArgumentParser(description='Download and process files from a GitHub repository.')
     parser.add_argument('--zip', type=str, help='Path to the local .zip file')
     parser.add_argument('--folder', type=str, help='Path to the local folder')
-    parser.add_argument('--lang', type=str, default='python', help='The programming language(s) and format(s) of the repository (comma-separated, e.g., python,pdf)')
+    parser.add_argument('--lang', type=str, default='python', 
+                        help='The programming language(s) and format(s) of the repository (comma-separated, e.g., python,pdf). If not provided, the script will attempt to determine the language based on the file extension.')
     parser.add_argument('--keep-comments', action='store_true', help='Keep comments and docstrings in the source code (only applicable for Python)')
     parser.add_argument('--branch_or_tag', type=str, help='The branch or tag of the repository to download', default="master")
     parser.add_argument('--debug', action='store_true', help='Enable debug logging')
@@ -179,7 +180,10 @@ def main(args=None) -> str:
     # Parse arguments
     parser = create_argument_parser()
     args = parser.parse_args(args)
-    args.lang = [lang.strip() for lang in args.lang.split(',')]
+    if args.lang:
+        args.lang = [lang.strip() for lang in args.lang.split(',')]
+    else:
+        args.lang = set() # this indicates a special behavior, where we add each encoutered file extension to the set
 
     # Add new languages if not in the dictionary
     def add_new_extension(languages):
