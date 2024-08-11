@@ -177,6 +177,12 @@ def check_for_include_override(include_list, exclude_list):
             if value:
                 logging.debug(f"Removing {include} from the exclude list")
                 exclude_list.remove(include)
+def add_new_extension(languages):
+    """Add new language extensions to the file_extension_dict"""
+    for lang in languages:
+        if lang not in file_extension_dict:
+            logging.info("Adding new extension to the dictionary")
+            file_extension_dict[lang] = [f'.{lang}']
 
 def main(args=None) -> str:
     # Parse arguments
@@ -188,12 +194,6 @@ def main(args=None) -> str:
     else:
         args.lang = set() # this indicates a special behavior, where we add each encoutered file extension to the set
 
-    # Add new languages if not in the dictionary
-    def add_new_extension(languages):
-        for lang in languages:
-            if lang not in file_extension_dict:
-                logging.info("Adding new extension to the dictionary")
-                file_extension_dict[lang] = [f'.{lang}']
     add_new_extension(args.lang)
 
     # Setup logging early
@@ -216,6 +216,10 @@ def main(args=None) -> str:
         else:
             args.exclude = []
 
+        if args.input:
+            # Determine if the input is a URL, a .zip file, or a folder, and
+            # set the corresponding attribute
+            determine_if_url_zip_or_folder(args)
         if args.repo:
             args.output_file = f"{args.repo.split('/')[-1]}_{','.join(args.lang)}.txt"
         elif args.zip:
@@ -223,14 +227,17 @@ def main(args=None) -> str:
         elif args.folder:
             args.folder = os.path.abspath(os.path.expanduser(args.folder))
             gitfolder = extract_git_folder(args.folder)
+            folder = args.folder if gitfolder is None else gitfolder
             check_for_include_override(args.folder.split('/'), args.exclude)
             check_for_include_override(args.folder.split('/'), args.excluded_dirs)
             if not gitfolder:
                 logging.warning("No git folder found in the path")
-            if args.name_append:
-                args.output_file = f"{gitfolder}_{args.name_append}_{','.join(args.lang)}.txt"
-            else:
-                args.output_file = f"{gitfolder}_{','.join(args.lang)}.txt"
+            args.output_file = f"{folder}_{','.join(args.lang)}.txt"
+        else:
+            raise ValueError("Input not recognized as a URL, a .zip file, or a folder")
+
+        if args.name_append:
+            args.output_file = f"{os.path.splitext(args.output_file)[0]}_{args.name_append}{os.path.splitext(args.output_file)[1]}"
 
         # TODO: default to placing file where the command is run
         # have a special flag that either creates and output folder or 
