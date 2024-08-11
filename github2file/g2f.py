@@ -151,6 +151,8 @@ def create_argument_parser():
     parser.add_argument('--ipynb_nbconvert', action='store_true', default=True, help='Convert IPython Notebook files to Python script files using nbconvert')
     parser.add_argument('--pbcopy', action='store_true', default=False, help='pbcopy the output to clipboard')
     parser.add_argument('--repo', type=str, help='The name of the GitHub repository')
+    parser.add_argument('--pdb', action='store_true', help="Drop into pdb on error")
+    parser.add_argument('--pdb_fromstart', action='store_true', help="Drop into pdb from start")
     parser.add_argument('input', type=str, help='A GitHub repository URL, a local .zip file, or a local folder',
                         default="", nargs='?')
     return parser
@@ -180,6 +182,7 @@ def main(args=None) -> str:
     # Parse arguments
     parser = create_argument_parser()
     args = parser.parse_args(args)
+    if args.pdb_fromstart: import pdb; pdb.set_trace()
     if args.lang:
         args.lang = [lang.strip() for lang in args.lang.split(',')]
     else:
@@ -267,7 +270,11 @@ def main(args=None) -> str:
     except argparse.ArgumentError as e:
         logging.error(str(e))
         parser.print_help()
-        sys.exit(1)
+        if args.pdb:
+            import pdb
+            pdb.post_mortem()
+        else:
+            sys.exit(1)
 
 if __name__ == "__main__":
     main()
