@@ -133,8 +133,8 @@ def is_likely_useful_file(file_path:str, lang:str, args:argparse.Namespace)->boo
             logging.debug(f"Skipping utility or config file: {file_path}")
             return False
     for doc_file in github_workflow_or_docs:
-        doc_file_check = (doc_file in file_path if not doc_file.startswith(".") else
-                 doc_file in os.path.basename(file_path))
+        doc_file_check = (file_path.endswith(f"/{doc_file}") if not doc_file.startswith(".") else
+                 os.path.basename(file_path) == doc_file)
         if doc_file_check:
             logging.debug(f"Skipping GitHub workflow or documentation file: {file_path}")
             return False
