@@ -145,7 +145,7 @@ def create_argument_parser():
     parser.add_argument('--debug', action='store_true', help='Enable debug logging')
     parser.add_argument('--include', type=str, help='Comma-separated list of subfolders/patterns to focus on')
     parser.add_argument('--exclude', type=str, help='Comma-separated list of file patterns to exclude')
-    parser.add_argument('--excluded_dirs', type=str, help='Comma-separated list of directories to exclude',
+    parser.add_argument('--excluded_dirs', '--exclude_dir', type=str, help='Comma-separated list of directories to exclude',
                         default="docs,examples,tests,test,scripts,utils,benchmarks")
     parser.add_argument('--name_append', type=str, help='Append this string to the output file name')
     parser.add_argument('--ipynb_nbconvert', action='store_true', default=True, help='Convert IPython Notebook files to Python script files using nbconvert')
