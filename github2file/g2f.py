@@ -5,6 +5,10 @@ import zipfile
 import io
 import logging
 import argparse
+import subprocess
+import tempfile
+from tqdm.auto import tqdm
+from pdfminer.high_level import extract_text
 from tqdm.auto import tqdm
 from pdfminer.high_level import extract_text
 
@@ -39,9 +43,33 @@ def process_zip(args:argparse.Namespace):
 def process_zip_object(zip, args:argparse.Namespace, output_file_path):
     """Process files from a local .zip file."""
     with open(output_file_path, "w", encoding="utf-8") as outfile:
-        for file_path in tqdm(zip.namelist(), 
-                              desc="Processing files", 
-                              unit="file", 
+        def generate_tree(path, tree_flags):
+            """Generate a file tree using the tree command."""
+            try:
+                result = subprocess.run(['tree'] + tree_flags.split() + [path], 
+                                      capture_output=True, 
+                                      text=True)
+                if result.returncode == 0:
+                    return result.stdout
+                else:
+                    logging.warning(f"Failed to generate tree: {result.stderr}")
+                    return None
+            except FileNotFoundError:
+                logging.warning("Tree command not found. Please install tree to use this feature.")
+                return None
+        
+        def process_zip_object(zip, args:argparse.Namespace, output_file_path):
+            """Process files from a local .zip file."""
+            with open(output_file_path, "w", encoding="utf-8") as outfile:
+                if args.include_tree:
+                    # Extract zip to temp directory to generate tree
+                    with tempfile.TemporaryDirectory() as tmpdir:
+                        zip.extractall(tmpdir)
+                        tree_output = generate_tree(tmpdir, args.tree_flags)
+                        if tree_output:
+                            outfile.write("# File Tree:\n")
+                            outfile.write(tree_output)
+                            outfile.write("\n# Files:\n\n")
                               total=len(zip.namelist())):
             if (file_path.endswith("/")
                 or not is_file_type(file_path, args.lang)
@@ -82,6 +110,14 @@ def process_zip_object(zip, args:argparse.Namespace, output_file_path):
 
 def process_folder(args:argparse.Namespace, output_file_path):
     """Process files from a local folder."""
+    with open(output_file_path, 'w', encoding='utf-8') as outfile:
+        if args.include_tree:
+            tree_output = generate_tree(args.folder, args.tree_flags)
+            if tree_output:
+                outfile.write("# File Tree:\n")
+                outfile.write(tree_output)
+                outfile.write("\n# Files:\n\n")
+    
     from functools import reduce
     from operator import ior
     for root, _, files in tqdm(os.walk(args.folder),
@@ -147,10 +183,13 @@ def create_argument_parser():
     parser.add_argument('--exclude', type=str, help='Comma-separated list of file patterns to exclude')
     parser.add_argument('--excluded_dirs', '--exclude_dir', type=str, help='Comma-separated list of directories to exclude',
                         default="docs,examples,tests,test,scripts,utils,benchmarks")
-    parser.add_argument('--name_append', type=str, help='Append this string to the output file name')
-    parser.add_argument('--ipynb_nbconvert', action='store_true', default=True, help='Convert IPython Notebook files to Python script files using nbconvert')
+    
     parser.add_argument('--pbcopy', action='store_true', default=False, help='pbcopy the output to clipboard')
     parser.add_argument('--repo', type=str, help='The name of the GitHub repository')
+    parser.add_argument('--pdb', action='store_true', help="Drop into pdb on error")
+    parser.add_argument('--pdb_fromstart', action='store_true', help="Drop into pdb from start")
+    parser.add_argument('--include-tree', action='store_true', help='Include a file tree at the start of output')
+    parser.add_argument('--tree-flags', type=str, default='-a', help='Flags to pass to tree command (default: -a)')
     parser.add_argument('--pdb', action='store_true', help="Drop into pdb on error")
     parser.add_argument('--pdb_fromstart', action='store_true', help="Drop into pdb from start")
     parser.add_argument('input', type=str, help='A GitHub repository URL, a local .zip file, or a local folder',
