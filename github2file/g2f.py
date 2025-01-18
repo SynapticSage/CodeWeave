@@ -6,13 +6,19 @@ import io
 import logging
 import argparse
 import subprocess
-import tempfile
-from tqdm.auto import tqdm
-from pdfminer.high_level import extract_text
 from tqdm.auto import tqdm
 from pdfminer.high_level import extract_text
 
-from github2file.utils.path import should_exclude_file, inclusion_violate, extract_git_folder, is_test_file, is_file_type, is_likely_useful_file, lookup_file_extension, file_extension_dict
+from github2file.utils.path import (
+    should_exclude_file,
+    inclusion_violate,
+    extract_git_folder,
+    is_test_file,
+    is_file_type,
+    is_likely_useful_file,
+    lookup_file_extension,
+    file_extension_dict,
+)
 from github2file.utils.file import has_sufficient_content, remove_comments_and_docstrings
 from github2file.utils.jupyter import convert_ipynb_to_py
 
@@ -29,48 +35,24 @@ def download_repo(args, output_file_path):
     response = requests.get(download_url)
 
     if response.status_code == 200:
-        zip = zipfile.ZipFile(io.BytesIO(response.content))
-        process_zip_object(zip, args, output_file_path)
+        zip_obj = zipfile.ZipFile(io.BytesIO(response.content))
+        process_zip_object(zip_obj, args, output_file_path)
     else:
         logging.error(f"Failed to download the repository. Status code: {response.status_code}")
         sys.exit(1)
 
-def process_zip(args:argparse.Namespace):
+def process_zip(args: argparse.Namespace):
     """Process files from a local .zip file."""
-    with zipfile.ZipFile(args.zip, 'r') as zip:
-        process_zip_object(zip, args)
+    with zipfile.ZipFile(args.zip, 'r') as zip_obj:
+        process_zip_object(zip_obj, args)
 
-def process_zip_object(zip, args:argparse.Namespace, output_file_path):
+def process_zip_object(zip_obj, args: argparse.Namespace, output_file_path):
     """Process files from a local .zip file."""
     with open(output_file_path, "w", encoding="utf-8") as outfile:
-        def generate_tree(path, tree_flags):
-            """Generate a file tree using the tree command."""
-            try:
-                result = subprocess.run(['tree'] + tree_flags.split() + [path], 
-                                      capture_output=True, 
-                                      text=True)
-                if result.returncode == 0:
-                    return result.stdout
-                else:
-                    logging.warning(f"Failed to generate tree: {result.stderr}")
-                    return None
-            except FileNotFoundError:
-                logging.warning("Tree command not found. Please install tree to use this feature.")
-                return None
-        
-        def process_zip_object(zip, args:argparse.Namespace, output_file_path):
-            """Process files from a local .zip file."""
-            with open(output_file_path, "w", encoding="utf-8") as outfile:
-                if args.include_tree:
-                    # Extract zip to temp directory to generate tree
-                    with tempfile.TemporaryDirectory() as tmpdir:
-                        zip.extractall(tmpdir)
-                        tree_output = generate_tree(tmpdir, args.tree_flags)
-                        if tree_output:
-                            outfile.write("# File Tree:\n")
-                            outfile.write(tree_output)
-                            outfile.write("\n# Files:\n\n")
-                              total=len(zip.namelist())):
+        for file_path in tqdm(zip_obj.namelist(),
+                              desc="Processing files",
+                              unit="file",
+                              total=len(zip_obj.namelist())):
             if (file_path.endswith("/")
                 or not is_file_type(file_path, args.lang)
                 or not is_likely_useful_file(file_path, args.lang, args)
@@ -88,10 +70,10 @@ def process_zip_object(zip, args:argparse.Namespace, output_file_path):
             if not confirm_include:
                 continue
 
-            file_content = zip.read(file_path).decode("utf-8")
+            file_content = zip_obj.read(file_path).decode("utf-8")
             logging.debug(f"Processing file: {file_path}")
             if file_path.endswith('.pdf') and 'pdf' in args.lang:
-                file_content = extract_text(io.BytesIO(zip.read(file_path)))
+                file_content = extract_text(io.BytesIO(zip_obj.read(file_path)))
             elif file_path.endswith('.ipynb') and args.ipynb_nbconvert:
                 file_content = convert_ipynb_to_py(file_content)
 
@@ -108,18 +90,32 @@ def process_zip_object(zip, args:argparse.Namespace, output_file_path):
             outfile.write(file_content)
             outfile.write("\n\n")
 
-def process_folder(args:argparse.Namespace, output_file_path):
+def process_folder(args: argparse.Namespace, output_file_path):
     """Process files from a local folder."""
-    with open(output_file_path, 'w', encoding='utf-8') as outfile:
-        if args.include_tree:
-            tree_output = generate_tree(args.folder, args.tree_flags)
-            if tree_output:
-                outfile.write("# File Tree:\n")
-                outfile.write(tree_output)
-                outfile.write("\n# Files:\n\n")
-    
+    # If --tree flag is provided, generate the file tree and prepend it to the output file.
+    if args.tree:
+        tree_cmd = ["tree"]
+        if args.tree_flags:
+            # Split the provided tree_flags string into separate command flags.
+            tree_cmd.extend(args.tree_flags.split())
+        tree_cmd.append(args.folder)
+        try:
+            result = subprocess.run(tree_cmd, capture_output=True, text=True, check=True)
+            tree_output = result.stdout
+        except subprocess.CalledProcessError as e:
+            logging.error("Failed to generate file tree via 'tree' command")
+            tree_output = f"Error generating file tree: {e}"
+        # Write the file tree at the top of the output file.
+        with open(output_file_path, "w", encoding="utf-8") as outfile:
+            outfile.write(tree_output)
+            outfile.write("\n\n")
+        logging.info("File tree prepended to output file.")
+
+    # Continue processing the folder files.
     from functools import reduce
     from operator import ior
+    # Open file in append mode if tree was already written, else write mode.
+    mode = "a" if args.tree else "w"
     for root, _, files in tqdm(os.walk(args.folder),
                                desc="Processing folders",
                                unit="folder",
@@ -138,8 +134,6 @@ def process_folder(args:argparse.Namespace, output_file_path):
             if reduce(ior, we_should_examine.values()):
                 logging.debug(f"Skipping file: {file_path}")
                 logging.debug(f"Reasons: {we_should_examine}")
-                logging.debug(f"Skipping file: {file_path}")
-                logging.debug(f"Reasons: {we_should_examine}")
                 continue
             if any(excluded_dir in root for excluded_dir in args.excluded_dirs):
                 logging.debug(f"Excluded directory, skipping {file_path}")
@@ -153,7 +147,7 @@ def process_folder(args:argparse.Namespace, output_file_path):
 
             if any(is_test_file(file_content, lang) for lang in args.lang) or not has_sufficient_content(file_content):
                 logging.debug(f"Skipping file: {file_path}")
-                logging.debug(f"Reason: Test file or insufficient content")
+                logging.debug("Reason: Test file or insufficient content")
                 continue
             if "python" in args.lang and not args.keep_comments:
                 extension_keys = lookup_file_extension(file_path)
@@ -162,13 +156,14 @@ def process_folder(args:argparse.Namespace, output_file_path):
                         file_content = remove_comments_and_docstrings(file_content)
                     except SyntaxError:
                         logging.debug(f"Tried to remove comments and docstrings from {file_path} but failed")
-                        logging.debug(f"Reason: Syntax error")
+                        logging.debug("Reason: Syntax error")
 
-            with open(output_file_path, 'a', encoding='utf-8') as outfile:
+            with open(output_file_path, mode, encoding='utf-8') as outfile:
                 comment_prefix = "// " if any(lang in ["go", "js"] for lang in args.lang) else "# "
                 outfile.write(f"{comment_prefix}File: {file_path}\n")
                 outfile.write(file_content)
                 outfile.write("\n\n")
+            mode = "a"  # Ensure subsequent writes are appended.
 
 def create_argument_parser():
     parser = argparse.ArgumentParser(description='Download and process files from a GitHub repository.')
@@ -181,21 +176,25 @@ def create_argument_parser():
     parser.add_argument('--debug', action='store_true', help='Enable debug logging')
     parser.add_argument('--include', type=str, help='Comma-separated list of subfolders/patterns to focus on')
     parser.add_argument('--exclude', type=str, help='Comma-separated list of file patterns to exclude')
-    parser.add_argument('--excluded_dirs', '--exclude_dir', type=str, help='Comma-separated list of directories to exclude',
+    parser.add_argument('--excluded_dirs', '--exclude_dir', type=str, 
+                        help='Comma-separated list of directories to exclude',
                         default="docs,examples,tests,test,scripts,utils,benchmarks")
-    
-    parser.add_argument('--pbcopy', action='store_true', default=False, help='pbcopy the output to clipboard')
+    parser.add_argument('--name_append', type=str, help='Append this string to the output file name')
+    parser.add_argument('--ipynb_nbconvert', action='store_true', default=True, 
+                        help='Convert IPython Notebook files to Python script files using nbconvert')
+    parser.add_argument('--pbcopy', action='store_true', default=False, 
+                        help='pbcopy the output to clipboard')
     parser.add_argument('--repo', type=str, help='The name of the GitHub repository')
     parser.add_argument('--pdb', action='store_true', help="Drop into pdb on error")
     parser.add_argument('--pdb_fromstart', action='store_true', help="Drop into pdb from start")
-    parser.add_argument('--include-tree', action='store_true', help='Include a file tree at the start of output')
-    parser.add_argument('--tree-flags', type=str, default='-a', help='Flags to pass to tree command (default: -a)')
-    parser.add_argument('--pdb', action='store_true', help="Drop into pdb on error")
-    parser.add_argument('--pdb_fromstart', action='store_true', help="Drop into pdb from start")
+    # New arguments for file tree prepending.
+    parser.add_argument('--tree', action='store_true', 
+                        help="Prepend a file tree (generated via the 'tree' command) to the output file (only works for local folders)")
+    parser.add_argument('--tree_flags', type=str,
+                        help="Flags to pass to the 'tree' command (e.g., '-a -L 2'). If not provided, defaults will be used")
     parser.add_argument('input', type=str, help='A GitHub repository URL, a local .zip file, or a local folder',
                         default="", nargs='?')
     return parser
-
 
 def determine_if_url_zip_or_folder(args):
     """Determine if the input is a URL, a .zip file, or a folder."""
@@ -211,11 +210,12 @@ def check_for_include_override(include_list, exclude_list):
     exclude_list = exclude_list or []
     checks = {include: (include in exclude_list) for include in include_list}
     if any(checks.values()):
-        # pop the excluded_dirs if it is included in the include list
+        # Pop the element from the exclude list if it is included in the include list.
         for include, value in checks.items():
             if value:
                 logging.debug(f"Removing {include} from the exclude list")
                 exclude_list.remove(include)
+
 def add_new_extension(languages):
     """Add new language extensions to the file_extension_dict"""
     for lang in languages:
@@ -224,18 +224,19 @@ def add_new_extension(languages):
             file_extension_dict[lang] = [f'.{lang}']
 
 def main(args=None) -> str:
-    # Parse arguments
+    # Parse arguments.
     parser = create_argument_parser()
     args = parser.parse_args(args)
-    if args.pdb_fromstart: import pdb; pdb.set_trace()
+    if args.pdb_fromstart:
+        import pdb; pdb.set_trace()
     if args.lang:
         args.lang = [lang.strip() for lang in args.lang.split(',')]
     else:
-        args.lang = set() # this indicates a special behavior, where we add each encoutered file extension to the set
+        args.lang = set()  # Indicates special behavior where each encountered file extension is added to the set.
 
     add_new_extension(args.lang)
 
-    # Setup logging early
+    # Setup logging early.
     setup_logging(args.debug)
 
     logging.info("Starting the script")
@@ -256,8 +257,7 @@ def main(args=None) -> str:
             args.exclude = []
 
         if args.input:
-            # Determine if the input is a URL, a .zip file, or a folder, and
-            # set the corresponding attribute
+            # Determine if the input is a URL, a .zip file, or a folder, and set the corresponding attribute.
             determine_if_url_zip_or_folder(args)
         if args.repo:
             args.output_file = f"{args.repo.split('/')[-1]}_{','.join(args.lang)}.txt"
@@ -278,9 +278,7 @@ def main(args=None) -> str:
         if args.name_append:
             args.output_file = f"{os.path.splitext(args.output_file)[0]}_{args.name_append}{os.path.splitext(args.output_file)[1]}"
 
-        # TODO: default to placing file where the command is run
-        # have a special flag that either creates and output folder or 
-        # places into the output folder located inside the g2f parent
+        # Default: place the output file inside an 'outputs' folder.
         output_dir = "outputs"
         os.makedirs(output_dir, exist_ok=True)
         output_file_path = os.path.join(output_dir, args.output_file)
@@ -308,7 +306,7 @@ def main(args=None) -> str:
             logging.info("No source code found to save -- check the input arguments")
 
         if args.pbcopy:
-            print(f"Copying the output to the clipboard {output_file_path} at {os.getcwd()}")
+            logging.info(f"Copying the output to the clipboard {output_file_path} at {os.getcwd()}")
             os.system(f'cat "{output_file_path}" | pbcopy')
 
         return output_file_path
