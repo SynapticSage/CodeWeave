@@ -91,79 +91,113 @@ def process_zip_object(zip_obj, args: argparse.Namespace, output_file_path):
             outfile.write("\n\n")
 
 def process_folder(args: argparse.Namespace, output_file_path):
-    """Process files from a local folder."""
-    # If --tree flag is provided, generate the file tree and prepend it to the output file.
+    """
+    Processes a local folder: 
+    1) Optionally prepends a file tree (via the 'tree' command).
+    2) Gathers and writes out source files that match the user's language and 
+       filtering criteria.
+    """
+
+    # --- 1) Generate a file tree using the 'tree' command, applying exclusions ---
     if args.tree:
-        tree_cmd = ["tree"]
+        tree_cmd = ['tree']
+
+        # If the user passed extra flags via --tree_flags, add them here
         if args.tree_flags:
-            # Split the provided tree_flags string into separate command flags.
             tree_cmd.extend(args.tree_flags.split())
+
+        # Build a list of exclusion patterns from excluded dirs and exclude file patterns
+        exclude_patterns = []
+        if args.excluded_dirs:
+            exclude_patterns.extend(args.excluded_dirs)
+        if args.exclude:
+            exclude_patterns.extend(args.exclude)
+
+        # If we have any patterns to exclude, pass them to `tree -I "...|...|..."`
+        # and also use --prune to avoid printing empty directories
+        if exclude_patterns:
+            # Create a single string with '|' separating each pattern
+            # e.g. docs|examples|test|scripts
+            tree_exclude_regex = '|'.join(exclude_patterns)
+            # Add the exclude and prune flags to the tree command
+            tree_cmd.extend(['-I', tree_exclude_regex, '--prune'])
+
+        # Finally, append the folder we want to run 'tree' on
         tree_cmd.append(args.folder)
+
         try:
             result = subprocess.run(tree_cmd, capture_output=True, text=True, check=True)
             tree_output = result.stdout
         except subprocess.CalledProcessError as e:
             logging.error("Failed to generate file tree via 'tree' command")
-            tree_output = f"Error generating file tree: {e}"
-        # Write the file tree at the top of the output file.
-        with open(output_file_path, "w", encoding="utf-8") as outfile:
-            outfile.write(tree_output)
-            outfile.write("\n\n")
-        logging.info("File tree prepended to output file.")
+            tree_output = f'Error generating file tree: {e}'
 
-    # Continue processing the folder files.
+        # Write the tree output to our final file (wipe it first)
+        with open(output_file_path, 'w', encoding='utf-8') as outfile:
+            outfile.write(tree_output)
+            outfile.write('\n\n')
+        logging.info('File tree prepended to output file.')
+
+    # --- 2) Process/append actual files that meet your criteria ---
     from functools import reduce
     from operator import ior
-    # Open file in append mode if tree was already written, else write mode.
-    mode = "a" if args.tree else "w"
-    for root, _, files in tqdm(os.walk(args.folder),
-                               desc="Processing folders",
-                               unit="folder",
-                               leave=False):
-        logging.debug(f"In folder: {root}")
-        logging.debug(f"File list:\n{files}")
+    mode = 'a' if args.tree else 'w'
+
+    for root, _, files in tqdm(os.walk(args.folder), desc='Processing folders', unit='folder', leave=False):
+        logging.debug(f'In folder: {root}')
+        logging.debug(f'File list:\n{files}')
+
         for file in files:
             file_path = os.path.join(root, file)
-            # Annotated logic for skipping files
+
+            # Build your dictionary of "skip" conditions
             we_should_examine = {
-                "bad filetype": not is_file_type(file, args.lang),
-                "not useful":   not any(is_likely_useful_file(file, lang, args) for lang in args.lang),
-                "should exclude": should_exclude_file(file, args),
-                "inclusion violate": inclusion_violate(file, args)
+                'bad filetype': not is_file_type(file, args.lang),
+                'not useful': not any(is_likely_useful_file(file, lang, args) for lang in args.lang),
+                'should exclude': should_exclude_file(file, args),
+                'inclusion violate': inclusion_violate(file, args),
             }
+
             if reduce(ior, we_should_examine.values()):
-                logging.debug(f"Skipping file: {file_path}")
-                logging.debug(f"Reasons: {we_should_examine}")
-                continue
-            if any(excluded_dir in root for excluded_dir in args.excluded_dirs):
-                logging.debug(f"Excluded directory, skipping {file_path}")
+                logging.debug(f'Skipping file: {file_path}')
+                logging.debug(f'Reasons: {we_should_examine}')
                 continue
 
+            # Also skip any directories in --excluded_dirs
+            if any(excluded_dir in root for excluded_dir in args.excluded_dirs):
+                logging.debug(f'Excluded directory, skipping {file_path}')
+                continue
+
+            # Now handle PDF extraction, or reading text directly
             if file_path.endswith('.pdf') and 'pdf' in args.lang:
                 file_content = extract_text(file_path)
             else:
                 with open(file_path, 'r', encoding='utf-8') as f:
                     file_content = f.read()
 
+            # Skip test files or short/empty files
             if any(is_test_file(file_content, lang) for lang in args.lang) or not has_sufficient_content(file_content):
-                logging.debug(f"Skipping file: {file_path}")
-                logging.debug("Reason: Test file or insufficient content")
+                logging.debug(f'Skipping file: {file_path}')
+                logging.debug('Reason: Test file or insufficient content')
                 continue
-            if "python" in args.lang and not args.keep_comments:
+
+            # Optionally remove comments/docstrings for Python
+            if 'python' in args.lang and (not args.keep_comments):
                 extension_keys = lookup_file_extension(file_path)
-                if "python" in extension_keys:
+                if 'python' in extension_keys:
                     try:
                         file_content = remove_comments_and_docstrings(file_content)
                     except SyntaxError:
-                        logging.debug(f"Tried to remove comments and docstrings from {file_path} but failed")
-                        logging.debug("Reason: Syntax error")
-
+                        logging.debug(f'Tried to remove comments/docstrings from {file_path} but failed (SyntaxError).')
+            
+            # Write the file content to the output file
             with open(output_file_path, mode, encoding='utf-8') as outfile:
-                comment_prefix = "// " if any(lang in ["go", "js"] for lang in args.lang) else "# "
-                outfile.write(f"{comment_prefix}File: {file_path}\n")
+                comment_prefix = '// ' if any(lang in ['go', 'js'] for lang in args.lang) else '# '
+                outfile.write(f'{comment_prefix}File: {file_path}\n')
                 outfile.write(file_content)
-                outfile.write("\n\n")
-            mode = "a"  # Ensure subsequent writes are appended.
+                outfile.write('\n\n')
+
+            mode = 'a'
 
 def create_argument_parser():
     parser = argparse.ArgumentParser(description='Download and process files from a GitHub repository.')
