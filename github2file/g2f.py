@@ -87,7 +87,18 @@ def process_zip_object(zip_obj, args: argparse.Namespace, output_file_path):
 
             comment_prefix = "// " if any(lang in ["go", "js"] for lang in args.lang) else "# "
             outfile.write(f"{comment_prefix}File: {file_path}\n")
-            outfile.write(file_content)
+            
+            # If topN is specified, show top N lines with a header comment
+            if args.topN:
+                lines = file_content.splitlines()
+                top_lines = lines[:args.topN]
+                outfile.write(f"{comment_prefix}(top {args.topN} lines)\n")
+                outfile.write('\n'.join(top_lines))
+                outfile.write("\n\n")
+                outfile.write(file_content)
+            else:
+                outfile.write(file_content)
+                
             outfile.write("\n\n")
 
 def process_folder(args: argparse.Namespace, output_file_path):
@@ -194,7 +205,18 @@ def process_folder(args: argparse.Namespace, output_file_path):
             with open(output_file_path, mode, encoding='utf-8') as outfile:
                 comment_prefix = '// ' if any(lang in ['go', 'js'] for lang in args.lang) else '# '
                 outfile.write(f'{comment_prefix}File: {file_path}\n')
-                outfile.write(file_content)
+                
+                # If topN is specified, show top N lines with a header comment
+                if args.topN:
+                    lines = file_content.splitlines()
+                    top_lines = lines[:args.topN]
+                    outfile.write(f'{comment_prefix}(top {args.topN} lines)\n')
+                    outfile.write('\n'.join(top_lines))
+                    outfile.write('\n\n')
+                    outfile.write(file_content)
+                else:
+                    outfile.write(file_content)
+                
                 outfile.write('\n\n')
 
             mode = 'a'
@@ -226,6 +248,8 @@ def create_argument_parser():
                         help="Prepend a file tree (generated via the 'tree' command) to the output file (only works for local folders)")
     parser.add_argument('--tree_flags', type=str,
                         help="Flags to pass to the 'tree' command (e.g., '-a -L 2'). If not provided, defaults will be used")
+    parser.add_argument('--topN', type=int, 
+                        help="Show the top N lines of each file in the output as a preview")
     parser.add_argument('input', type=str, help='A GitHub repository URL, a local .zip file, or a local folder',
                         default="", nargs='?')
     return parser
