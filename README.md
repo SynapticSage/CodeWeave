@@ -11,6 +11,8 @@ GitHub2File is a tool to download and process files from a GitHub repository, ex
 - Convert IPython notebooks to Python scripts.
 - Remove comments and docstrings from Python files.
 - Optionally copy the output to the clipboard (MacOS only).
+- Generate a file tree structure at the beginning of the output file.
+- Preview the top N lines of each file.
 
 ## Installation
 
@@ -79,8 +81,9 @@ python -m github2file --folder <path_to_folder> [options]
 - `--exclude`: Comma-separated list of file patterns to exclude.
 - `--excluded_dirs`: Comma-separated list of directories to exclude. Default is `docs,examples,tests,test,scripts,utils,benchmarks`.
 - `--name_append`: Append this string to the output file name.
-- `--ipynb_nbconvert`: Convert IPython Notebook files to Python script files using nbconvert. Default is `True`.
-- `--pbcopy`: Copy the output to the clipboard. Default is `False`.
+- `--tree`: Prepend a file tree (generated via the 'tree' command) to the output file. Only works for local folders. The tree follows the same exclusion patterns specified by `--exclude` and `--excluded_dirs`.
+- `--tree_flags`: Flags to pass to the 'tree' command (e.g., '-a -L 2'). If not provided, defaults will be used.
+- `--topN`: Show the top N lines of each file in the output as a preview.
 
 ### Example Usage
 
@@ -113,6 +116,22 @@ You can combine multiple options to fine-tune the processing:
 
 ```bash
 python -m github2file --folder /path/to/repo --lang python,pdf --keep-comments --include src,lib --name_append processed --debug --pbcopy
+```
+
+#### Using File Tree and Top N Preview
+
+To include a file tree structure and preview the top 10 lines of each file:
+
+```bash
+python -m github2file --folder /path/to/repo --lang python,pdf --tree --topN 10 --exclude test
+```
+
+The tree command respects exclusion patterns, so files and directories specified in `--exclude` and `--excluded_dirs` won't appear in the tree structure.
+
+You can also customize the tree command with additional flags:
+
+```bash
+python -m github2file --folder /path/to/repo --tree --tree_flags "-a -L 3" --lang python
 ```
 
 ## Contributing
