@@ -75,6 +75,7 @@ python -m github2file --folder <path_to_folder> [options]
 - `--keep-comments`: Keep comments and docstrings in the source code (only applicable for Python).
 - `--branch_or_tag`: The branch or tag of the repository to download. Default is `master`.
 - `--ipynb_nbconvert`: Convert IPython Notebook files to Python script files using nbconvert. Default is `True`.
+- `--pdf_text_mode`: Convert PDF files to text for analysis (requires pdf filetype in --lang). Default is `False`.
 - `--pbcopy`: Copy the output to the clipboard. Default is `False`.
 - `--debug`: Enable debug logging.
 - `--include`: Comma-separated list of subfolders/patterns to focus on.
@@ -133,6 +134,16 @@ You can also customize the tree command with additional flags:
 ```bash
 python -m github2file --folder /path/to/repo --tree --tree_flags "-a -L 3" --lang python
 ```
+
+#### Processing PDF Files
+
+To include PDF files in your output and extract their text content:
+
+```bash
+python -m github2file --folder /path/to/repo --lang python,pdf --pdf_text_mode
+```
+
+Without `--pdf_text_mode`, PDFs will be included in the output but only as placeholders. With this flag enabled, the tool will extract the text content from the PDFs and include it in the output file.
 
 ## Contributing
 

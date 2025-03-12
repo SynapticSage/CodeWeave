@@ -4,6 +4,10 @@ import ast
 
 def has_sufficient_content(file_content, min_line_count=10):
     """Check if the file has a minimum number of substantive lines."""
+    # Special case for PDF files with placeholder text
+    if file_content.startswith("[PDF file - use"):
+        return True
+        
     lines = [line for line in file_content.split('\n') if line.strip() and not line.strip().startswith(('#', '//'))]
     return len(lines) >= min_line_count
 

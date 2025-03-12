@@ -70,12 +70,19 @@ def process_zip_object(zip_obj, args: argparse.Namespace, output_file_path):
             if not confirm_include:
                 continue
 
-            file_content = zip_obj.read(file_path).decode("utf-8")
             logging.debug(f"Processing file: {file_path}")
             if file_path.endswith('.pdf') and 'pdf' in args.lang:
-                file_content = extract_text(io.BytesIO(zip_obj.read(file_path)))
+                if args.pdf_text_mode:
+                    file_content = extract_text(io.BytesIO(zip_obj.read(file_path)))
+                    logging.debug(f"Extracted text from PDF: {file_path}")
+                else:
+                    # Just indicate this is a PDF file but don't extract text
+                    file_content = "[PDF file - use --pdf_text_mode to extract text]"
             elif file_path.endswith('.ipynb') and args.ipynb_nbconvert:
+                file_content = zip_obj.read(file_path).decode("utf-8")
                 file_content = convert_ipynb_to_py(file_content)
+            else:
+                file_content = zip_obj.read(file_path).decode("utf-8")
 
             if any(is_test_file(file_content, lang) for lang in args.lang) or not has_sufficient_content(file_content):
                 continue
@@ -181,7 +188,12 @@ def process_folder(args: argparse.Namespace, output_file_path):
 
             # Now handle PDF extraction, or reading text directly
             if file_path.endswith('.pdf') and 'pdf' in args.lang:
-                file_content = extract_text(file_path)
+                if args.pdf_text_mode:
+                    file_content = extract_text(file_path)
+                    logging.debug(f"Extracted text from PDF: {file_path}")
+                else:
+                    # Just indicate this is a PDF file but don't extract text
+                    file_content = "[PDF file - use --pdf_text_mode to extract text]"
             else:
                 with open(file_path, 'r', encoding='utf-8') as f:
                     file_content = f.read()
@@ -238,6 +250,8 @@ def create_argument_parser():
     parser.add_argument('--name_append', type=str, help='Append this string to the output file name')
     parser.add_argument('--ipynb_nbconvert', action='store_true', default=True, 
                         help='Convert IPython Notebook files to Python script files using nbconvert')
+    parser.add_argument('--pdf_text_mode', action='store_true', default=False,
+                        help='Convert PDF files to text for analysis (requires pdf filetype in --lang)')
     parser.add_argument('--pbcopy', action='store_true', default=False, 
                         help='pbcopy the output to clipboard')
     parser.add_argument('--repo', type=str, help='The name of the GitHub repository')
