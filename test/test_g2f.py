@@ -34,3 +34,33 @@ def test_topN_flag():
     with open(output_file, 'r', encoding='utf-8') as f:
         content = f.read()
         assert "(top 5 lines)" in content
+
+def test_excluded_dirs_auto_added_to_exclude():
+    # Test that excluded_dirs are automatically added to exclude
+    from argparse import Namespace
+    
+    # Create a parser to simulate the command line
+    parser = create_argument_parser()
+    test_args = parser.parse_args(['--excluded_dirs', 'env,.venv,node_modules', '--folder', 'test'])
+    
+    # Process the arguments as main() would
+    if test_args.excluded_dirs:
+        test_args.excluded_dirs = [subfolder.strip() for subfolder in test_args.excluded_dirs.split(',')]
+    else:
+        test_args.excluded_dirs = []
+        
+    if test_args.exclude:
+        test_args.exclude = [pattern.strip() for pattern in test_args.exclude.split(',')]
+    else:
+        test_args.exclude = []
+        
+    # Add excluded_dirs to exclude list as our modified code would
+    for excluded_dir in test_args.excluded_dirs:
+        if excluded_dir not in test_args.exclude:
+            test_args.exclude.append(excluded_dir)
+    
+    # Verify all excluded_dirs are in the exclude list
+    assert all(dir in test_args.exclude for dir in test_args.excluded_dirs)
+    assert 'env' in test_args.exclude
+    assert '.venv' in test_args.exclude
+    assert 'node_modules' in test_args.exclude

@@ -82,7 +82,7 @@ python -m github2file --folder <path_to_folder> [options]
 - `--debug`: Enable debug logging.
 - `--include`: Comma-separated list of subfolders/patterns to focus on.
 - `--exclude`: Comma-separated list of file patterns to exclude.
-- `--excluded_dirs`: Comma-separated list of directories to exclude. Default is `docs,examples,tests,test,scripts,utils,benchmarks`.
+- `--excluded_dirs`: Comma-separated list of directories to exclude. Default is `docs,examples,tests,test,scripts,utils,benchmarks`. Note: Patterns listed here are automatically added to `--exclude` patterns, so you don't need to specify them in both places.
 - `--name_append`: Append this string to the output file name.
 - `--tree`: Prepend a file tree (generated via the 'tree' command) to the output file. Only works for local folders. The tree follows the same exclusion patterns specified by `--exclude` and `--excluded_dirs`.
 - `--tree_flags`: Flags to pass to the 'tree' command (e.g., '-a -L 2'). If not provided, defaults will be used.
@@ -146,6 +146,20 @@ python -m github2file --folder /path/to/repo --lang python,pdf --pdf_text_mode
 ```
 
 Without `--pdf_text_mode`, PDFs will be included in the output but only as placeholders. With this flag enabled, the tool will extract the text content from the PDFs and include it in the output file.
+
+#### Simplified Directory Exclusion
+
+You now only need to specify directories to exclude once. The tool automatically applies patterns from `--excluded_dirs` to file exclusions:
+
+```bash
+# Before:
+# python -m github2file --excluded_dirs env,.venv,.mind --exclude env,.venv,.mind --lang python,md,org,txt .
+
+# Now (simplified):
+python -m github2file --excluded_dirs env,.venv,.mind --lang python,md,org,txt .
+```
+
+This will exclude the specified directories from both directory traversal and the file tree output.
 
 #### Code Summarization with Fabric
 

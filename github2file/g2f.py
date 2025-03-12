@@ -319,18 +319,31 @@ def main(args=None) -> str:
     logging.debug(f"Arguments: {args}")
 
     try:
+        # Process excluded directories
         if args.excluded_dirs:
             args.excluded_dirs = [subfolder.strip() for subfolder in args.excluded_dirs.split(',')]
+        else:
+            args.excluded_dirs = []
+            
+        # Process include patterns
         if args.include:
             args.include = [subfolder.strip() for subfolder in args.include.split(',')]
             check_for_include_override(args.include, args.exclude)
             check_for_include_override(args.include, args.excluded_dirs)
         else:
             args.include = []
+            
+        # Process exclude patterns and automatically add excluded_dirs to ensure consistent exclusion
         if args.exclude:
             args.exclude = [pattern.strip() for pattern in args.exclude.split(',')]
         else:
             args.exclude = []
+            
+        # Automatically add excluded_dirs patterns to exclude list to avoid duplication
+        # but avoid adding duplicates
+        for excluded_dir in args.excluded_dirs:
+            if excluded_dir not in args.exclude:
+                args.exclude.append(excluded_dir)
 
         if args.input:
             # Determine if the input is a URL, a .zip file, or a folder, and set the corresponding attribute.
