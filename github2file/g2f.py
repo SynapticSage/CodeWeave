@@ -252,6 +252,10 @@ def create_argument_parser():
                         help='Convert IPython Notebook files to Python script files using nbconvert')
     parser.add_argument('--pdf_text_mode', action='store_true', default=False,
                         help='Convert PDF files to text for analysis (requires pdf filetype in --lang)')
+    parser.add_argument('--summarize', action='store_true', default=False,
+                        help='Generate a summary of the code using Fabric')
+    parser.add_argument('--fabric_args', type=str, default='literal',
+                        help='Arguments to pass to Fabric when using --summarize')
     parser.add_argument('--pbcopy', action='store_true', default=False, 
                         help='pbcopy the output to clipboard')
     parser.add_argument('--repo', type=str, help='The name of the GitHub repository')
@@ -374,6 +378,20 @@ def main(args=None) -> str:
 
         if os.path.exists(output_file_path):
             logging.info(f"Combined {', '.join(args.lang).capitalize()} source code saved to {output_file_path}")
+            
+            # If summarize is specified, pipe the output to Fabric
+            if args.summarize:
+                logging.info("Generating code summary using Fabric...")
+                summary_file_path = f"{os.path.splitext(output_file_path)[0]}_summary.txt"
+                fabric_command = f'cat "{output_file_path}" | fabric --{args.fabric_args} > "{summary_file_path}"'
+                
+                try:
+                    logging.debug(f"Running command: {fabric_command}")
+                    os.system(fabric_command)
+                    logging.info(f"Code summary saved to {summary_file_path}")
+                except Exception as e:
+                    logging.error(f"Error generating summary with Fabric: {e}")
+                    logging.error("Make sure Fabric is installed and accessible in your PATH")
         else:
             logging.info("No source code found to save -- check the input arguments")
 

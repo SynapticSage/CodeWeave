@@ -76,6 +76,8 @@ python -m github2file --folder <path_to_folder> [options]
 - `--branch_or_tag`: The branch or tag of the repository to download. Default is `master`.
 - `--ipynb_nbconvert`: Convert IPython Notebook files to Python script files using nbconvert. Default is `True`.
 - `--pdf_text_mode`: Convert PDF files to text for analysis (requires pdf filetype in --lang). Default is `False`.
+- `--summarize`: Generate a summary of the code using Fabric. Default is `False`.
+- `--fabric_args`: Arguments to pass to Fabric when using --summarize. Default is `literal`.
 - `--pbcopy`: Copy the output to the clipboard. Default is `False`.
 - `--debug`: Enable debug logging.
 - `--include`: Comma-separated list of subfolders/patterns to focus on.
@@ -144,6 +146,24 @@ python -m github2file --folder /path/to/repo --lang python,pdf --pdf_text_mode
 ```
 
 Without `--pdf_text_mode`, PDFs will be included in the output but only as placeholders. With this flag enabled, the tool will extract the text content from the PDFs and include it in the output file.
+
+#### Code Summarization with Fabric
+
+To generate a summary of your code using Fabric:
+
+```bash
+python -m github2file --folder /path/to/repo --lang python --summarize
+```
+
+This requires Fabric to be installed and accessible in your PATH. The summary will be saved to a separate file with "_summary" appended to the filename.
+
+You can customize the Fabric command with additional arguments:
+
+```bash
+python -m github2file --folder /path/to/repo --lang python --summarize --fabric_args "literal analyze"
+```
+
+This will run `fabric --literal analyze` on the generated output file.
 
 ## Contributing
 
