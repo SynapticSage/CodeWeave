@@ -9,3 +9,4 @@ github2file/.DS_Store
 .aider*
 outputs/
 test/test.pdf
+proposal.py

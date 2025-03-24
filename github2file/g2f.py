@@ -41,13 +41,27 @@ def download_repo(args, output_file_path):
         logging.error(f"Failed to download the repository. Status code: {response.status_code}")
         sys.exit(1)
 
-def process_zip(args: argparse.Namespace):
+def process_zip(args: argparse.Namespace, output_file_path=None):
     """Process files from a local .zip file."""
     with zipfile.ZipFile(args.zip, 'r') as zip_obj:
-        process_zip_object(zip_obj, args)
+        process_zip_object(zip_obj, args, output_file_path)
 
-def process_zip_object(zip_obj, args: argparse.Namespace, output_file_path):
+def process_zip_object(zip_obj, args: argparse.Namespace, output_file_path=None):
     """Process files from a local .zip file."""
+    # Use args.output_file_path if output_file_path is not provided
+    if output_file_path is None and hasattr(args, "output_file_path"):
+        output_file_path = args.output_file_path
+    
+    # Parse the program argument if provided
+    program_filetype = None
+    program_command = None
+    if args.program:
+        program_filetype, program_command = parse_program_arg(args.program)
+        if program_filetype and program_command:
+            logging.info(f"Will run '{program_command}' on files of type '{program_filetype}'")
+        else:
+            logging.error("Invalid program format, ignoring --program option")
+            
     with open(output_file_path, "w", encoding="utf-8") as outfile:
         for file_path in tqdm(zip_obj.namelist(),
                               desc="Processing files",
@@ -71,6 +85,29 @@ def process_zip_object(zip_obj, args: argparse.Namespace, output_file_path):
                 continue
 
             logging.debug(f"Processing file: {file_path}")
+            
+            # --- Run program on specific filetype if requested ---
+            program_output = None
+            if program_filetype and program_command:
+                # For zip files, we need to extract the file to a temporary location to run the program
+                if program_filetype in lookup_file_extension(file_path) or program_filetype == '*':
+                    # Create a temporary file
+                    import tempfile
+                    with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+                        temp_file.write(zip_obj.read(file_path))
+                        temp_path = temp_file.name
+                    
+                    # Run the program on the temporary file
+                    program_output = run_program_on_file(temp_path, program_command)
+                    logging.debug(f"Program output for {file_path}: {program_output}")
+                    
+                    # Clean up the temporary file
+                    import os
+                    os.unlink(temp_path)
+                    
+                    # Need to re-read the file since we've consumed it
+                    zip_obj.open(file_path)
+            
             if file_path.endswith('.pdf') and 'pdf' in args.lang:
                 if args.pdf_text_mode:
                     file_content = extract_text(io.BytesIO(zip_obj.read(file_path)))
@@ -95,6 +132,12 @@ def process_zip_object(zip_obj, args: argparse.Namespace, output_file_path):
             comment_prefix = "// " if any(lang in ["go", "js"] for lang in args.lang) else "# "
             outfile.write(f"{comment_prefix}File: {file_path}\n")
             
+            # If the program ran on this file, include its output
+            if program_output:
+                outfile.write(f"{comment_prefix}Program output:\n")
+                outfile.write(program_output)
+                outfile.write("\n\n")
+            
             # If topN is specified, show top N lines with a header comment
             if args.topN:
                 lines = file_content.splitlines()
@@ -114,7 +157,18 @@ def process_folder(args: argparse.Namespace, output_file_path):
     1) Optionally prepends a file tree (via the 'tree' command).
     2) Gathers and writes out source files that match the user's language and 
        filtering criteria.
+    3) Optionally runs a program on each file of a specific filetype.
     """
+    
+    # Parse the program argument if provided
+    program_filetype = None
+    program_command = None
+    if args.program:
+        program_filetype, program_command = parse_program_arg(args.program)
+        if program_filetype and program_command:
+            logging.info(f"Will run '{program_command}' on files of type '{program_filetype}'")
+        else:
+            logging.error("Invalid program format, ignoring --program option")
 
     # --- 1) Generate a file tree using the 'tree' command, applying exclusions ---
     if args.tree:
@@ -185,6 +239,15 @@ def process_folder(args: argparse.Namespace, output_file_path):
             if any(excluded_dir in root for excluded_dir in args.excluded_dirs):
                 logging.debug(f'Excluded directory, skipping {file_path}')
                 continue
+                
+            # --- 3) Run program on specific filetype if requested ---
+            program_output = None
+            if program_filetype and program_command:
+                # Check if this file matches the specified filetype
+                extension_keys = lookup_file_extension(file_path)
+                if program_filetype in extension_keys or program_filetype == '*':
+                    program_output = run_program_on_file(file_path, program_command)
+                    logging.debug(f"Program output for {file_path}: {program_output}")
 
             # Now handle PDF extraction, or reading text directly
             if file_path.endswith('.pdf') and 'pdf' in args.lang:
@@ -217,6 +280,12 @@ def process_folder(args: argparse.Namespace, output_file_path):
             with open(output_file_path, mode, encoding='utf-8') as outfile:
                 comment_prefix = '// ' if any(lang in ['go', 'js'] for lang in args.lang) else '# '
                 outfile.write(f'{comment_prefix}File: {file_path}\n')
+                
+                # If the program ran on this file, include its output
+                if program_output:
+                    outfile.write(f'{comment_prefix}Program output:\n')
+                    outfile.write(program_output)
+                    outfile.write('\n\n')
                 
                 # If topN is specified, show top N lines with a header comment
                 if args.topN:
@@ -268,6 +337,8 @@ def create_argument_parser():
                         help="Flags to pass to the 'tree' command (e.g., '-a -L 2'). If not provided, defaults will be used")
     parser.add_argument('--topN', type=int, 
                         help="Show the top N lines of each file in the output as a preview")
+    parser.add_argument('--program', type=str, 
+                        help="Run the specified program on each file matching the given filetype. Format: 'filetype=command'")
     parser.add_argument('input', type=str, help='A GitHub repository URL, a local .zip file, or a local folder',
                         default="", nargs='?')
     return parser
@@ -298,6 +369,43 @@ def add_new_extension(languages):
         if lang not in file_extension_dict:
             logging.info("Adding new extension to the dictionary")
             file_extension_dict[lang] = [f'.{lang}']
+
+def parse_program_arg(program_arg):
+    """Parse the program argument in the format 'filetype=command'"""
+    if not program_arg or '=' not in program_arg:
+        logging.error("Invalid program format. Expected 'filetype=command'")
+        return None, None
+    
+    parts = program_arg.split('=', 1)
+    if len(parts) != 2:
+        logging.error("Invalid program format. Expected 'filetype=command'")
+        return None, None
+    
+    filetype, command = parts
+    filetype = filetype.strip()
+    command = command.strip()
+    
+    if not filetype or not command:
+        logging.error("Both filetype and command must be specified")
+        return None, None
+    
+    return filetype, command
+
+def run_program_on_file(file_path, command):
+    """Run the specified command on the file"""
+    try:
+        logging.info(f"Running command on file: {file_path}")
+        full_command = f'{command} "{file_path}"'
+        logging.debug(f"Executing: {full_command}")
+        result = subprocess.run(full_command, shell=True, capture_output=True, text=True)
+        if result.returncode != 0:
+            logging.error(f"Command failed with exit code {result.returncode}")
+            logging.error(f"Error: {result.stderr}")
+            return None
+        return result.stdout
+    except Exception as e:
+        logging.error(f"Error running command on file: {e}")
+        return None
 
 def main(args=None) -> str:
     # Parse arguments.
@@ -371,6 +479,9 @@ def main(args=None) -> str:
         output_dir = "outputs"
         os.makedirs(output_dir, exist_ok=True)
         output_file_path = os.path.join(output_dir, args.output_file)
+        
+        # Attach the output_file_path to the args namespace for easy access
+        args.output_file_path = output_file_path
 
         if os.path.exists(output_file_path):
             logging.info(f"Output file {output_file_path} already exists. Removing it.")

@@ -87,6 +87,7 @@ python -m github2file --folder <path_to_folder> [options]
 - `--tree`: Prepend a file tree (generated via the 'tree' command) to the output file. Only works for local folders. The tree follows the same exclusion patterns specified by `--exclude` and `--excluded_dirs`.
 - `--tree_flags`: Flags to pass to the 'tree' command (e.g., '-a -L 2'). If not provided, defaults will be used.
 - `--topN`: Show the top N lines of each file in the output as a preview.
+- `--program`: Run a specified program on each file matching a given filetype. Format: `filetype=command`. The command will be run with the file path as an argument, and the output will be included in the output file. Use `*` as the filetype to run the command on all files.
 
 ### Example Usage
 
@@ -136,6 +137,24 @@ You can also customize the tree command with additional flags:
 ```bash
 python -m github2file --folder /path/to/repo --tree --tree_flags "-a -L 3" --lang python
 ```
+
+#### Running Programs on Specific Filetypes
+
+To run a specific program on each file of a certain type:
+
+```bash
+python -m github2file --folder /path/to/repo --lang python --program "python=wc -l"
+```
+
+This will run `wc -l` on each Python file and include the output before the file content.
+
+You can also use `*` as a wildcard to run the program on all files:
+
+```bash
+python -m github2file --folder /path/to/repo --lang python,js --program "*=stat"
+```
+
+This will run the `stat` command on all files regardless of filetype.
 
 #### Processing PDF Files
 
