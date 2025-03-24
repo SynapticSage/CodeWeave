@@ -88,6 +88,7 @@ python -m github2file --folder <path_to_folder> [options]
 - `--tree_flags`: Flags to pass to the 'tree' command (e.g., '-a -L 2'). If not provided, defaults will be used.
 - `--topN`: Show the top N lines of each file in the output as a preview.
 - `--program`: Run a specified program on each file matching a given filetype. Format: `filetype=command`. The command will be run with the file path as an argument, and the output will be included in the output file. Use `*` as the filetype to run the command on all files.
+- `--nosubstitute`: Show both program output AND file content when using `--program`. Without this flag (default behavior), only the program output will be shown instead of the file content.
 
 ### Example Usage
 
@@ -154,7 +155,15 @@ You can also use `*` as a wildcard to run the program on all files:
 python -m github2file --folder /path/to/repo --lang python,js --program "*=stat"
 ```
 
-This will run the `stat` command on all files regardless of filetype.
+This will run the `stat` command on all files regardless of filetype, showing only the output of the `stat` command in the output file.
+
+If you want to see both the program output AND the original file content, use the `--nosubstitute` flag:
+
+```bash
+python -m github2file --folder /path/to/repo --lang python --program "python=wc -l" --nosubstitute
+```
+
+This will run `wc -l` on each Python file, showing both the line count output AND the original file content in the output file.
 
 #### Processing PDF Files
 

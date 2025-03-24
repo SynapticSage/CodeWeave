@@ -132,12 +132,19 @@ def process_zip_object(zip_obj, args: argparse.Namespace, output_file_path=None)
             comment_prefix = "// " if any(lang in ["go", "js"] for lang in args.lang) else "# "
             outfile.write(f"{comment_prefix}File: {file_path}\n")
             
-            # If the program ran on this file, include its output
+            # If the program ran on this file, handle the output according to --nosubstitute flag
             if program_output:
                 outfile.write(f"{comment_prefix}Program output:\n")
                 outfile.write(program_output)
                 outfile.write("\n\n")
-            
+                
+                # If --nosubstitute is provided, include file content as well
+                # Otherwise (default), only show program output and skip file content
+                if not args.nosubstitute:
+                    # Skip writing file content since we're substituting with program output
+                    outfile.write("\n\n")
+                    continue
+
             # If topN is specified, show top N lines with a header comment
             if args.topN:
                 lines = file_content.splitlines()
@@ -281,11 +288,19 @@ def process_folder(args: argparse.Namespace, output_file_path):
                 comment_prefix = '// ' if any(lang in ['go', 'js'] for lang in args.lang) else '# '
                 outfile.write(f'{comment_prefix}File: {file_path}\n')
                 
-                # If the program ran on this file, include its output
+                # If the program ran on this file, handle the output according to --nosubstitute flag
                 if program_output:
                     outfile.write(f'{comment_prefix}Program output:\n')
                     outfile.write(program_output)
                     outfile.write('\n\n')
+                    
+                    # If --nosubstitute is provided, include file content as well
+                    # Otherwise (default), only show program output and skip file content
+                    if not args.nosubstitute:
+                        # Skip writing file content since we're substituting with program output
+                        outfile.write('\n\n')
+                        mode = 'a'
+                        continue
                 
                 # If topN is specified, show top N lines with a header comment
                 if args.topN:
@@ -339,6 +354,8 @@ def create_argument_parser():
                         help="Show the top N lines of each file in the output as a preview")
     parser.add_argument('--program', type=str, 
                         help="Run the specified program on each file matching the given filetype. Format: 'filetype=command'")
+    parser.add_argument('--nosubstitute', action='store_true', default=False,
+                        help="Show both program output AND file content when using --program. Default behavior is to only show program output.")
     parser.add_argument('input', type=str, help='A GitHub repository URL, a local .zip file, or a local folder',
                         default="", nargs='?')
     return parser
