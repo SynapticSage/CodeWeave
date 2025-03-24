@@ -68,51 +68,84 @@ python -m github2file --folder <path_to_folder> [options]
 
 ### Options
 
-- `--repo_url`: The URL of the GitHub repository to download.
-- `--zip_file`: Path to the local zip file.
+#### Input Sources
+
+- `<input>`: A GitHub repository URL, a local .zip file, or a local folder.
+- `--repo`: The name of the GitHub repository to download.
+- `--zip`: Path to the local zip file.
 - `--folder`: Path to the local folder.
-- `--lang`: The programming language(s) and format(s) of the repository (comma-separated). Default is `python`. Supported formats include `python`, `pdf`, and `ipynb`.
-- `--keep-comments`: Keep comments and docstrings in the source code (only applicable for Python).
 - `--branch_or_tag`: The branch or tag of the repository to download. Default is `master`.
-- `--ipynb_nbconvert`: Convert IPython Notebook files to Python script files using nbconvert. Default is `True`.
-- `--pdf_text_mode`: Convert PDF files to text for analysis (requires pdf filetype in --lang). Default is `False`.
-- `--summarize`: Generate a summary of the code using Fabric. Default is `False`.
-- `--fabric_args`: Arguments to pass to Fabric when using --summarize. Default is `literal`.
-- `--pbcopy`: Copy the output to the clipboard. Default is `False`.
-- `--debug`: Enable debug logging.
+
+#### File Selection & Filtering
+
+- `--lang`: The programming language(s) and format(s) of the repository (comma-separated, e.g., python,pdf). Default is `python`.
 - `--include`: Comma-separated list of subfolders/patterns to focus on.
 - `--exclude`: Comma-separated list of file patterns to exclude.
 - `--excluded_dirs`: Comma-separated list of directories to exclude. Default is `docs,examples,tests,test,scripts,utils,benchmarks`. Note: Patterns listed here are automatically added to `--exclude` patterns, so you don't need to specify them in both places.
-- `--name_append`: Append this string to the output file name.
+
+#### Content Processing
+
+- `--keep-comments`: Keep comments and docstrings in the source code (only applicable for Python).
+- `--ipynb_nbconvert`: Convert IPython Notebook files to Python script files using nbconvert. Default is `True`.
+- `--pdf_text_mode`: Convert PDF files to text for analysis (requires pdf filetype in --lang). Default is `False`.
+- `--topN`: Show the top N lines of each file in the output as a preview.
 - `--tree`: Prepend a file tree (generated via the 'tree' command) to the output file. Only works for local folders. The tree follows the same exclusion patterns specified by `--exclude` and `--excluded_dirs`.
 - `--tree_flags`: Flags to pass to the 'tree' command (e.g., '-a -L 2'). If not provided, defaults will be used.
-- `--topN`: Show the top N lines of each file in the output as a preview.
+
+#### External Program Integration
+
 - `--program`: Run a specified program on each file matching a given filetype. Format: `filetype=command`. The command will be run with the file path as an argument, and the output will be included in the output file. Use `*` as the filetype to run the command on all files.
 - `--nosubstitute`: Show both program output AND file content when using `--program`. Without this flag (default behavior), only the program output will be shown instead of the file content.
+- `--summarize`: Generate a summary of the code using Fabric. Default is `False`.
+- `--fabric_args`: Arguments to pass to Fabric when using --summarize. Default is `literal`.
+
+#### Output Options
+
+- `--name_append`: Append this string to the output file name.
+- `--pbcopy`: Copy the output to clipboard (macOS only). Default is `False`.
+
+#### Debugging Options
+
+- `--debug`: Enable debug logging.
+- `--pdb`: Drop into pdb on error.
+- `--pdb_fromstart`: Drop into pdb from start.
 
 ### Example Usage
 
 #### Download and Process a GitHub Repository
 
 ```bash
-python -m github2file --repo_url https://github.com/user/repo --lang python,markdown,pdf --pbcopy --excluded_dirs env
+python -m github2file https://github.com/user/repo --lang python,markdown,pdf --pbcopy --excluded_dirs env
 ```
 
-or 
+or using the explicit parameter:
 
 ```bash
-python -m github2file --lang python,markdown --pbcopy --excluded_dirs env https://github.com/user/repo 
+python -m github2file --repo https://github.com/user/repo --lang python,markdown --excluded_dirs env
 ```
+
 #### Process a Local Zip File
 
 ```bash
-python -m github2file --zip_file /path/to/repo.zip --lang python,pdf --include src,lib --exclude test --keep-comments
+python -m github2file /path/to/repo.zip --lang python,pdf --include src,lib --exclude test --keep-comments
+```
+
+or using the explicit parameter:
+
+```bash
+python -m github2file --zip /path/to/repo.zip --lang python,pdf --include src,lib
 ```
 
 #### Process a Local Directory
 
 ```bash
-python -m github2file --folder /path/to/repo --lang python,pdf --excluded_dirs env,docs
+python -m github2file /path/to/folder --lang python,pdf --excluded_dirs env,docs
+```
+
+or using the explicit parameter:
+
+```bash
+python -m github2file --folder /path/to/folder --lang python,pdf --excluded_dirs env,docs
 ```
 
 ### Advanced Usage

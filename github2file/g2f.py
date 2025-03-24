@@ -319,45 +319,64 @@ def process_folder(args: argparse.Namespace, output_file_path):
 
 def create_argument_parser():
     parser = argparse.ArgumentParser(description='Download and process files from a GitHub repository.')
-    parser.add_argument('--zip', type=str, help='Path to the local .zip file')
-    parser.add_argument('--folder', type=str, help='Path to the local folder')
-    parser.add_argument('--lang', type=str, default='python', 
-                        help='The programming language(s) and format(s) of the repository (comma-separated, e.g., python,pdf). If not provided, the script will attempt to determine the language based on the file extension.')
-    parser.add_argument('--keep-comments', action='store_true', help='Keep comments and docstrings in the source code (only applicable for Python)')
-    parser.add_argument('--branch_or_tag', type=str, help='The branch or tag of the repository to download', default="master")
-    parser.add_argument('--debug', action='store_true', help='Enable debug logging')
-    parser.add_argument('--include', type=str, help='Comma-separated list of subfolders/patterns to focus on')
-    parser.add_argument('--exclude', type=str, help='Comma-separated list of file patterns to exclude')
-    parser.add_argument('--excluded_dirs', '--exclude_dir', type=str, 
-                        help='Comma-separated list of directories to exclude',
-                        default="docs,examples,tests,test,scripts,utils,benchmarks")
-    parser.add_argument('--name_append', type=str, help='Append this string to the output file name')
-    parser.add_argument('--ipynb_nbconvert', action='store_true', default=True, 
+    
+    # Input source group
+    input_group = parser.add_argument_group('Input Sources')
+    input_group.add_argument('input', type=str, help='A GitHub repository URL, a local .zip file, or a local folder',
+                       default="", nargs='?')
+    input_group.add_argument('--repo', type=str, help='The name of the GitHub repository')
+    input_group.add_argument('--zip', type=str, help='Path to the local .zip file')
+    input_group.add_argument('--folder', type=str, help='Path to the local folder')
+    input_group.add_argument('--branch_or_tag', type=str, help='The branch or tag of the repository to download', default="master")
+    
+    # File selection and filtering group
+    filter_group = parser.add_argument_group('File Selection & Filtering')
+    filter_group.add_argument('--lang', type=str, default='python', 
+                       help='The programming language(s) and format(s) of the repository (comma-separated, e.g., python,pdf)')
+    filter_group.add_argument('--include', type=str, help='Comma-separated list of subfolders/patterns to focus on')
+    filter_group.add_argument('--exclude', type=str, help='Comma-separated list of file patterns to exclude')
+    filter_group.add_argument('--excluded_dirs', '--exclude_dir', type=str, 
+                       help='Comma-separated list of directories to exclude',
+                       default="docs,examples,tests,test,scripts,utils,benchmarks")
+    
+    # Content processing group
+    content_group = parser.add_argument_group('Content Processing')
+    content_group.add_argument('--keep-comments', action='store_true', 
+                        help='Keep comments and docstrings in the source code (only applicable for Python)')
+    content_group.add_argument('--ipynb_nbconvert', action='store_true', default=True, 
                         help='Convert IPython Notebook files to Python script files using nbconvert')
-    parser.add_argument('--pdf_text_mode', action='store_true', default=False,
+    content_group.add_argument('--pdf_text_mode', action='store_true', default=False,
                         help='Convert PDF files to text for analysis (requires pdf filetype in --lang)')
-    parser.add_argument('--summarize', action='store_true', default=False,
-                        help='Generate a summary of the code using Fabric')
-    parser.add_argument('--fabric_args', type=str, default='literal',
-                        help='Arguments to pass to Fabric when using --summarize')
-    parser.add_argument('--pbcopy', action='store_true', default=False, 
-                        help='pbcopy the output to clipboard')
-    parser.add_argument('--repo', type=str, help='The name of the GitHub repository')
-    parser.add_argument('--pdb', action='store_true', help="Drop into pdb on error")
-    parser.add_argument('--pdb_fromstart', action='store_true', help="Drop into pdb from start")
-    # New arguments for file tree prepending.
-    parser.add_argument('--tree', action='store_true', 
-                        help="Prepend a file tree (generated via the 'tree' command) to the output file (only works for local folders)")
-    parser.add_argument('--tree_flags', type=str,
-                        help="Flags to pass to the 'tree' command (e.g., '-a -L 2'). If not provided, defaults will be used")
-    parser.add_argument('--topN', type=int, 
+    content_group.add_argument('--topN', type=int, 
                         help="Show the top N lines of each file in the output as a preview")
-    parser.add_argument('--program', type=str, 
+    content_group.add_argument('--tree', action='store_true', 
+                        help="Prepend a file tree (generated via the 'tree' command) to the output file (only works for local folders)")
+    content_group.add_argument('--tree_flags', type=str,
+                        help="Flags to pass to the 'tree' command (e.g., '-a -L 2'). If not provided, defaults will be used")
+    
+    # External program integration group
+    program_group = parser.add_argument_group('External Program Integration')
+    program_group.add_argument('--program', type=str, 
                         help="Run the specified program on each file matching the given filetype. Format: 'filetype=command'")
-    parser.add_argument('--nosubstitute', action='store_true', default=False,
+    program_group.add_argument('--nosubstitute', action='store_true', default=False,
                         help="Show both program output AND file content when using --program. Default behavior is to only show program output.")
-    parser.add_argument('input', type=str, help='A GitHub repository URL, a local .zip file, or a local folder',
-                        default="", nargs='?')
+    program_group.add_argument('--summarize', action='store_true', default=False,
+                        help='Generate a summary of the code using Fabric')
+    program_group.add_argument('--fabric_args', type=str, default='literal',
+                        help='Arguments to pass to Fabric when using --summarize')
+    
+    # Output options group
+    output_group = parser.add_argument_group('Output Options')
+    output_group.add_argument('--name_append', type=str, help='Append this string to the output file name')
+    output_group.add_argument('--pbcopy', action='store_true', default=False, 
+                        help='Copy the output to clipboard (macOS only)')
+    
+    # Debug options group
+    debug_group = parser.add_argument_group('Debugging Options')
+    debug_group.add_argument('--debug', action='store_true', help='Enable debug logging')
+    debug_group.add_argument('--pdb', action='store_true', help="Drop into pdb on error")
+    debug_group.add_argument('--pdb_fromstart', action='store_true', help="Drop into pdb from start")
+    
     return parser
 
 def determine_if_url_zip_or_folder(args):
