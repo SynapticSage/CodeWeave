@@ -222,8 +222,17 @@ def process_folder(args: argparse.Namespace, output_file_path):
     from operator import ior
     mode = 'a' if args.tree else 'w'
 
-    for root, _, files in tqdm(os.walk(args.folder), desc='Processing folders', unit='folder', leave=False):
+    for root, dirs, files in tqdm(os.walk(args.folder), desc='Processing folders', unit='folder', leave=False):
         logging.debug(f'In folder: {root}')
+        
+        # Skip excluded directories during os.walk() - modify dirs in-place
+        dirs[:] = [d for d in dirs if d not in args.excluded_dirs]
+        
+        # Early check: skip if current root contains any excluded directory
+        if any(excluded_dir in root for excluded_dir in args.excluded_dirs):
+            logging.debug(f'Excluded directory, skipping entire folder: {root}')
+            continue
+            
         logging.debug(f'File list:\n{files}')
 
         for file in files:
@@ -242,10 +251,7 @@ def process_folder(args: argparse.Namespace, output_file_path):
                 logging.debug(f'Reasons: {we_should_examine}')
                 continue
 
-            # Also skip any directories in --excluded_dirs
-            if any(excluded_dir in root for excluded_dir in args.excluded_dirs):
-                logging.debug(f'Excluded directory, skipping {file_path}')
-                continue
+            # Note: Directory exclusion now handled at folder level above
                 
             # --- 3) Run program on specific filetype if requested ---
             program_output = None
