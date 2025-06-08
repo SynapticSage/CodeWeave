@@ -1,14 +1,14 @@
-from github2file.g2f import create_argument_parser, main
-import github2file
+from codeweave.main import create_argument_parser, main
+import codeweave
 import os
 
-folder = os.path.dirname(os.path.dirname(github2file.__file__))
+folder = os.path.dirname(os.path.dirname(codeweave.__file__))
 
 def test_argument_parser():
     parser = create_argument_parser()
-    args = parser.parse_args(['--lang', 'python,pdf', 'https://github.com/yourusername/github2file'])
+    args = parser.parse_args(['--lang', 'python,pdf', 'https://github.com/yourusername/codeweave'])
     assert args.lang == 'python,pdf'
-    assert args.input == 'https://github.com/yourusername/github2file'
+    assert args.input == 'https://github.com/yourusername/codeweave'
 
 def test_main_function():
     # This is a placeholder test. You can add more comprehensive tests based on your requirements.

@@ -1,30 +1,78 @@
-# GitHub2File
+# CodeWeave
 
-GitHub2File is a tool to download and process files from a GitHub repository, extracting and combining source code or other relevant files into a single output file.
+[![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
+CodeWeave is a powerful command-line tool that intelligently aggregates source code from GitHub repositories, local zip files, or directories, weaving them into organized, AI-ready output files. Perfect for code analysis, documentation, and AI-assisted development workflows.
+
+## Quick Start
+
+```bash
+# Process current directory for Python files
+codeweave . --lang python
+
+# Download and process a GitHub repository  
+codeweave https://github.com/user/repo --lang python,markdown
+
+# Process with file tree and exclude common directories
+codeweave /path/to/project --lang python --tree --excluded_dirs .venv,node_modules
+```
 
 ## Features
 
-- Download and process files from a GitHub repository.
-- Process local zip files and directories.
-- Filter files by programming language.
-- Include or exclude specific directories and files.
-- Convert IPython notebooks to Python scripts.
-- Remove comments and docstrings from Python files.
-- Optionally copy the output to the clipboard (MacOS only).
-- Generate a file tree structure at the beginning of the output file.
-- Preview the top N lines of each file.
+- **Multiple Input Sources**: Process GitHub repositories, local zip files, or directories
+- **Smart Language Detection**: Support for 15+ programming languages and file types
+- **Advanced Filtering**: Include/exclude specific directories, files, and patterns
+- **Performance Optimized**: Fast directory traversal that skips excluded directories entirely
+- **File Tree Generation**: Visual directory structure with exclusion support
+- **Content Processing**: Remove comments, convert notebooks, extract PDF text
+- **External Program Integration**: Run custom commands on specific file types
+- **Code Summarization**: Generate summaries using Fabric integration
+- **Output Control**: Copy to clipboard, append names, preview top N lines
+- **Developer Friendly**: Debug logging, grouped CLI options, extensive customization
 
 ## Installation
 
-To install the package, run:
+### Easy Installation (Recommended)
 
 ```bash
-pip install .
+git clone https://github.com/user/codeweave.git
+cd codeweave
+make install-global
 ```
+
+This installs CodeWeave and creates a global `codeweave` command you can use anywhere.
+
+### Manual Installation Options
+
+**Standard Installation:**
+```bash
+git clone https://github.com/user/codeweave.git
+cd codeweave
+make install
+```
+
+**Development Installation:**
+```bash
+git clone https://github.com/user/codeweave.git
+cd codeweave
+make install-dev
+```
+
+**Direct from GitHub:**
+```bash
+pip install git+https://github.com/user/codeweave.git
+```
+
+### Usage After Installation
+
+- **Global command:** `codeweave <path>` (after `make install-global`)
+- **Python module:** `python -m codeweave <path>`
+- **Short alias:** `cw <path>` (available after pip install)
 
 ## Supported Languages and File Types
 
-GitHub2File supports the following languages and file types:
+CodeWeave supports the following languages and file types:
 
 - **Python** (`.py`)
 - **PDF** (`.pdf`)
@@ -48,22 +96,28 @@ GitHub2File supports the following languages and file types:
 
 You can use GitHub2File either by downloading a repository directly from GitHub, processing a local zip file, or processing a local directory. Here are the different ways to call the script:
 
-### Download and Process a GitHub Repository
+### Basic Usage
+
+The tool accepts a single input argument that can be a GitHub URL, local zip file, or directory path:
 
 ```bash
-python -m github2file --repo_url <repository_url> [options]
+# GitHub repository
+codeweave https://github.com/user/repo
+
+# Local directory
+codeweave /path/to/folder
+
+# Local zip file
+codeweave /path/to/archive.zip
 ```
 
-### Process a Local Zip File
+You can also use explicit parameters:
 
 ```bash
-python -m github2file --zip_file <path_to_zip_file> [options]
-```
-
-### Process a Local Directory
-
-```bash
-python -m github2file --folder <path_to_folder> [options]
+# Explicit parameters
+codeweave --repo https://github.com/user/repo
+codeweave --folder /path/to/folder
+codeweave --zip /path/to/archive.zip
 ```
 
 ### Options
@@ -115,37 +169,37 @@ python -m github2file --folder <path_to_folder> [options]
 #### Download and Process a GitHub Repository
 
 ```bash
-python -m github2file https://github.com/user/repo --lang python,markdown,pdf --pbcopy --excluded_dirs env
+codeweave https://github.com/user/repo --lang python,markdown,pdf --pbcopy --excluded_dirs env
 ```
 
 or using the explicit parameter:
 
 ```bash
-python -m github2file --repo https://github.com/user/repo --lang python,markdown --excluded_dirs env
+codeweave --repo https://github.com/user/repo --lang python,markdown --excluded_dirs env
 ```
 
 #### Process a Local Zip File
 
 ```bash
-python -m github2file /path/to/repo.zip --lang python,pdf --include src,lib --exclude test --keep-comments
+codeweave /path/to/repo.zip --lang python,pdf --include src,lib --exclude test --keep-comments
 ```
 
 or using the explicit parameter:
 
 ```bash
-python -m github2file --zip /path/to/repo.zip --lang python,pdf --include src,lib
+codeweave --zip /path/to/repo.zip --lang python,pdf --include src,lib
 ```
 
 #### Process a Local Directory
 
 ```bash
-python -m github2file /path/to/folder --lang python,pdf --excluded_dirs env,docs
+codeweave /path/to/folder --lang python,pdf --excluded_dirs env,docs
 ```
 
 or using the explicit parameter:
 
 ```bash
-python -m github2file --folder /path/to/folder --lang python,pdf --excluded_dirs env,docs
+codeweave --folder /path/to/folder --lang python,pdf --excluded_dirs env,docs
 ```
 
 ### Advanced Usage
@@ -153,7 +207,7 @@ python -m github2file --folder /path/to/folder --lang python,pdf --excluded_dirs
 You can combine multiple options to fine-tune the processing:
 
 ```bash
-python -m github2file --folder /path/to/repo --lang python,pdf --keep-comments --include src,lib --name_append processed --debug --pbcopy
+codeweave --folder /path/to/repo --lang python,pdf --keep-comments --include src,lib --name_append processed --debug --pbcopy
 ```
 
 #### Using File Tree and Top N Preview
@@ -161,7 +215,7 @@ python -m github2file --folder /path/to/repo --lang python,pdf --keep-comments -
 To include a file tree structure and preview the top 10 lines of each file:
 
 ```bash
-python -m github2file --folder /path/to/repo --lang python,pdf --tree --topN 10 --exclude test
+codeweave --folder /path/to/repo --lang python,pdf --tree --topN 10 --exclude test
 ```
 
 The tree command respects exclusion patterns, so files and directories specified in `--exclude` and `--excluded_dirs` won't appear in the tree structure.
@@ -169,7 +223,7 @@ The tree command respects exclusion patterns, so files and directories specified
 You can also customize the tree command with additional flags:
 
 ```bash
-python -m github2file --folder /path/to/repo --tree --tree_flags "-a -L 3" --lang python
+codeweave --folder /path/to/repo --tree --tree_flags "-a -L 3" --lang python
 ```
 
 #### Running Programs on Specific Filetypes
@@ -177,7 +231,7 @@ python -m github2file --folder /path/to/repo --tree --tree_flags "-a -L 3" --lan
 To run a specific program on each file of a certain type:
 
 ```bash
-python -m github2file --folder /path/to/repo --lang python --program "python=wc -l"
+codeweave --folder /path/to/repo --lang python --program "python=wc -l"
 ```
 
 This will run `wc -l` on each Python file and include the output before the file content.
@@ -185,7 +239,7 @@ This will run `wc -l` on each Python file and include the output before the file
 You can also use `*` as a wildcard to run the program on all files:
 
 ```bash
-python -m github2file --folder /path/to/repo --lang python,js --program "*=stat"
+codeweave --folder /path/to/repo --lang python,js --program "*=stat"
 ```
 
 This will run the `stat` command on all files regardless of filetype, showing only the output of the `stat` command in the output file.
@@ -193,7 +247,7 @@ This will run the `stat` command on all files regardless of filetype, showing on
 If you want to see both the program output AND the original file content, use the `--nosubstitute` flag:
 
 ```bash
-python -m github2file --folder /path/to/repo --lang python --program "python=wc -l" --nosubstitute
+codeweave --folder /path/to/repo --lang python --program "python=wc -l" --nosubstitute
 ```
 
 This will run `wc -l` on each Python file, showing both the line count output AND the original file content in the output file.
@@ -203,7 +257,7 @@ This will run `wc -l` on each Python file, showing both the line count output AN
 To include PDF files in your output and extract their text content:
 
 ```bash
-python -m github2file --folder /path/to/repo --lang python,pdf --pdf_text_mode
+codeweave --folder /path/to/repo --lang python,pdf --pdf_text_mode
 ```
 
 Without `--pdf_text_mode`, PDFs will be included in the output but only as placeholders. With this flag enabled, the tool will extract the text content from the PDFs and include it in the output file.
@@ -214,10 +268,10 @@ You now only need to specify directories to exclude once. The tool automatically
 
 ```bash
 # Before:
-# python -m github2file --excluded_dirs env,.venv,.mind --exclude env,.venv,.mind --lang python,md,org,txt .
+# codeweave --excluded_dirs env,.venv,.mind --exclude env,.venv,.mind --lang python,md,org,txt .
 
 # Now (simplified):
-python -m github2file --excluded_dirs env,.venv,.mind --lang python,md,org,txt .
+codeweave --excluded_dirs env,.venv,.mind --lang python,md,org,txt .
 ```
 
 This will exclude the specified directories from both directory traversal and the file tree output.
@@ -227,7 +281,7 @@ This will exclude the specified directories from both directory traversal and th
 To generate a summary of your code using Fabric:
 
 ```bash
-python -m github2file --folder /path/to/repo --lang python --summarize
+codeweave --folder /path/to/repo --lang python --summarize
 ```
 
 This requires Fabric to be installed and accessible in your PATH. The summary will be saved to a separate file with "_summary" appended to the filename.
@@ -235,12 +289,80 @@ This requires Fabric to be installed and accessible in your PATH. The summary wi
 You can customize the Fabric command with additional arguments:
 
 ```bash
-python -m github2file --folder /path/to/repo --lang python --summarize --fabric_args "literal analyze"
+codeweave --folder /path/to/repo --lang python --summarize --fabric_args "literal analyze"
 ```
 
 This will run `fabric --literal analyze` on the generated output file.
 
+## Performance Tips
+
+For optimal performance with large codebases:
+
+1. **Use directory exclusions**: Always exclude large directories like `.venv`, `node_modules`, `.git`
+   ```bash
+   codeweave . --excluded_dirs .venv,node_modules,.git,dist,build
+   ```
+
+2. **Leverage pattern exclusions**: Use `--exclude` for file patterns
+   ```bash
+   codeweave . --exclude "*.pyc,*.log,*.tmp"
+   ```
+
+3. **Limit language scope**: Only process languages you need
+   ```bash
+   codeweave . --lang python,markdown  # Instead of processing all file types
+   ```
+
+4. **The tool automatically optimizes**: Excluded directories are skipped entirely during traversal, not just filtered afterward
+
+## CLI Help
+
+The tool provides comprehensive help with grouped options:
+
+```bash
+codeweave --help
+```
+
+Options are organized into logical groups:
+- **Input Sources**: Repository, zip, folder, branch selection
+- **File Selection & Filtering**: Language, include/exclude patterns
+- **Content Processing**: Comments, notebooks, PDFs, tree generation
+- **External Program Integration**: Custom commands, summarization
+- **Output Options**: File naming, clipboard integration
+- **Debugging Options**: Logging, debugging tools
+
+## Troubleshooting
+
+### Common Issues
+
+**"No source code found to save"**
+- Check your `--lang` parameter matches your file types
+- Verify `--excluded_dirs` isn't excluding your target files
+- Use `--debug` to see what files are being processed
+
+**Slow performance on large repositories**
+- Add common large directories to `--excluded_dirs`: `.venv`, `node_modules`, `.git`
+- Use `--include` to focus on specific directories
+- Consider using `--topN` for preview instead of full files
+
+**Tree command not found**
+- Install `tree` command: `brew install tree` (macOS) or `apt-get install tree` (Ubuntu)
+- Or skip tree generation by omitting `--tree` flag
+
+**PDF text extraction fails**
+- Ensure `pdfminer` is installed: `pip install pdfminer.six`
+- Some PDFs may not support text extraction
+
 ## Contributing
 
 If you want to contribute to this project, please fork the repository and create a pull request.
+
+### Development Setup
+
+```bash
+git clone https://github.com/user/codeweave.git
+cd codeweave
+make install-dev
+make test  # Run tests
+```
 

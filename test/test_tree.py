@@ -29,7 +29,7 @@ def test_tree_option(tmp_path):
     # If you run the tests via python -m pytest, you might need to execute it like:
     #   python -m g2f ... or call the g2f script specifically.
     command = [
-        "python", os.path.join("github2file", "g2f.py"),  # Adjust if your entry point script is named differently or on PATH.
+        "python", os.path.join("codeweave", "main.py"),  # Entry point script
         ".",
         "--tree",
         "--tree_flags", "-L 2",

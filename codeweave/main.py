@@ -9,7 +9,7 @@ import subprocess
 from tqdm.auto import tqdm
 from pdfminer.high_level import extract_text
 
-from github2file.utils.path import (
+from codeweave.utils.path import (
     should_exclude_file,
     inclusion_violate,
     extract_git_folder,
@@ -19,8 +19,8 @@ from github2file.utils.path import (
     lookup_file_extension,
     file_extension_dict,
 )
-from github2file.utils.file import has_sufficient_content, remove_comments_and_docstrings
-from github2file.utils.jupyter import convert_ipynb_to_py
+from codeweave.utils.file import has_sufficient_content, remove_comments_and_docstrings
+from codeweave.utils.jupyter import convert_ipynb_to_py
 
 def setup_logging(debug_flag):
     """Setup logging configuration."""
@@ -324,7 +324,7 @@ def process_folder(args: argparse.Namespace, output_file_path):
             mode = 'a'
 
 def create_argument_parser():
-    parser = argparse.ArgumentParser(description='Download and process files from a GitHub repository.')
+    parser = argparse.ArgumentParser(description='CodeWeave - Intelligent source code aggregation and AI workflow optimization')
     
     # Input source group
     input_group = parser.add_argument_group('Input Sources')

@@ -5,7 +5,7 @@ import shutil
 import glob
 import time
 from pathlib import Path
-from github2file.g2f import main, parse_program_arg, run_program_on_file
+from codeweave.main import main, parse_program_arg, run_program_on_file
 
 # Repository root directory
 repo_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -122,7 +122,7 @@ def test_program_feature_selective():
         assert "1" in py_output  # Python file has 1 line
         
         # Check file extension identification logic
-        from github2file.utils.path import lookup_file_extension
+        from codeweave.utils.path import lookup_file_extension
         py_ext = lookup_file_extension(py_file)
         assert "python" in py_ext
         
@@ -165,7 +165,7 @@ def test_program_feature_wildcard():
         assert "1" in txt_output  # Text file has 1 line
         
         # Verify the wildcard matches all filetypes
-        from github2file.utils.path import lookup_file_extension
+        from codeweave.utils.path import lookup_file_extension
         
         # Verify the filetype matching works as expected with wildcard
         matches_py = filetype in lookup_file_extension(py_file) or filetype == '*'
@@ -186,7 +186,7 @@ def test_no_program_output_for_mismatched_filetype():
         
         # Create a custom filetype for our test
         # Add an entry to the file_extension_dict
-        from github2file.utils.path import file_extension_dict
+        from codeweave.utils.path import file_extension_dict
         file_extension_dict['text'] = ['.txt']  # Add text format for this test
         
         # Setup test data for parse_program_arg
@@ -198,7 +198,7 @@ def test_no_program_output_for_mismatched_filetype():
         assert command == "wc -l"
         
         # Verify matching logic with the text file
-        from github2file.utils.path import lookup_file_extension
+        from codeweave.utils.path import lookup_file_extension
         
         py_ext = lookup_file_extension(py_file)
         txt_ext = lookup_file_extension(txt_file)
@@ -219,7 +219,7 @@ def test_no_program_output_for_mismatched_filetype():
     finally:
         # Clean up
         # Restore the file_extension_dict
-        from github2file.utils.path import file_extension_dict
+        from codeweave.utils.path import file_extension_dict
         if 'text' in file_extension_dict:
             del file_extension_dict['text']
         shutil.rmtree(temp_dir, ignore_errors=True)

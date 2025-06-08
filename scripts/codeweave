@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+
+# CodeWeave global script - allows calling 'codeweave' from anywhere
+# This script finds the installed codeweave package and runs it with the provided arguments
+
+# Function to find the codeweave installation
+find_codeweave() {
+    # Try to find codeweave in common installation locations
+    local possible_paths=(
+        "$(which codeweave 2>/dev/null)"
+        "$(python3 -c 'import codeweave; print(codeweave.__file__)' 2>/dev/null | sed 's|/__init__.py||' | sed 's|/main.py||')"
+        "$(python -c 'import codeweave; print(codeweave.__file__)' 2>/dev/null | sed 's|/__init__.py||' | sed 's|/main.py||')"
+    )
+    
+    for path in "${possible_paths[@]}"; do
+        if [[ -n "$path" && -f "$path" ]]; then
+            echo "$path"
+            return 0
+        fi
+    done
+    
+    return 1
+}
+
+# Try to run codeweave using different methods
+run_codeweave() {
+    # Method 1: Try the console script entry point first
+    if command -v codeweave >/dev/null 2>&1; then
+        exec codeweave "$@"
+    fi
+    
+    # Method 2: Try running as Python module
+    if python3 -c "import codeweave" >/dev/null 2>&1; then
+        exec python3 -m codeweave "$@"
+    elif python -c "import codeweave" >/dev/null 2>&1; then
+        exec python -m codeweave "$@"
+    fi
+    
+    # Method 3: If all else fails, show helpful error
+    echo "Error: CodeWeave is not installed or not found in PATH"
+    echo ""
+    echo "To install CodeWeave:"
+    echo "  cd /path/to/codeweave && make install"
+    echo ""
+    echo "Or install manually:"
+    echo "  pip install ."
+    exit 1
+}
+
+# Run CodeWeave with all provided arguments
+run_codeweave "$@"

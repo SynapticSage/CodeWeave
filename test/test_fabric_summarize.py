@@ -5,7 +5,7 @@ import logging
 from unittest.mock import patch, MagicMock
 from io import StringIO
 
-from github2file.g2f import main, create_argument_parser
+from codeweave.main import main, create_argument_parser
 
 
 def test_summarize_flag_in_argument_parser():

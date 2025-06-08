@@ -1,12 +1,13 @@
 from setuptools import setup, find_packages
 
 setup(
-    name='github2file',
+    name='codeweave',
     version='0.1.0',
     packages=find_packages(),
     entry_points={
         'console_scripts': [
-            'github2file = github2file.github2file:main'
+            'codeweave = codeweave.main:main',
+            'cw = codeweave.main:main'
         ]
     },
     install_requires=[
@@ -26,10 +27,10 @@ setup(
     test_suite='pytest',
     author='Your Name',
     author_email='your_email@example.com',
-    description='A tool to download and process files from a GitHub repository',
+    description='CodeWeave - Intelligent source code aggregation and AI workflow optimization',
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',
-    url='https://github.com/yourusername/github2file',
+    url='https://github.com/yourusername/codeweave',
     classifiers=[
         'Development Status :: 3 - Alpha',
         'Intended Audience :: Developers',
