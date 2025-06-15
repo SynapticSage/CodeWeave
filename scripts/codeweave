@@ -1,49 +1,99 @@
 #!/usr/bin/env bash
 
 # CodeWeave global script - allows calling 'codeweave' from anywhere
-# This script finds the installed codeweave package and runs it with the provided arguments
+# This script finds and runs the installed codeweave package as a Python module
 
-# Function to find the codeweave installation
-find_codeweave() {
-    # Try to find codeweave in common installation locations
-    local possible_paths=(
-        "$(which codeweave 2>/dev/null)"
-        "$(python3 -c 'import codeweave; print(codeweave.__file__)' 2>/dev/null | sed 's|/__init__.py||' | sed 's|/main.py||')"
-        "$(python -c 'import codeweave; print(codeweave.__file__)' 2>/dev/null | sed 's|/__init__.py||' | sed 's|/main.py||')"
-    )
-    
-    for path in "${possible_paths[@]}"; do
-        if [[ -n "$path" && -f "$path" ]]; then
-            echo "$path"
-            return 0
+# Function to try running codeweave with a specific Python executable
+try_python() {
+    local python_cmd="$1"
+    if command -v "$python_cmd" >/dev/null 2>&1; then
+        if "$python_cmd" -c "import codeweave" >/dev/null 2>&1; then
+            exec "$python_cmd" -m codeweave "$@"
         fi
-    done
-    
+    fi
     return 1
 }
 
-# Try to run codeweave using different methods
+# Function to find codeweave installation paths
+find_codeweave_installations() {
+    local possible_paths=(
+        # Common project locations
+        "$HOME/Code/repos/github2file"
+        "$HOME/github2file" 
+        "$HOME/Projects/github2file"
+        "$HOME/code/github2file"
+        # Current directory if it looks like the project
+        "$(pwd)"
+        # Try to find via git if we're in a repo
+        "$(git rev-parse --show-toplevel 2>/dev/null)"
+    )
+    
+    for path in "${possible_paths[@]}"; do
+        if [[ -n "$path" && -f "$path/codeweave/main.py" ]]; then
+            echo "$path"
+        fi
+    done
+}
+
+# Try to run codeweave using smart environment detection
 run_codeweave() {
-    # Method 1: Try the console script entry point first
-    if command -v codeweave >/dev/null 2>&1; then
-        exec codeweave "$@"
-    fi
+    # Method 1: Try current Python environment first
+    if try_python "python3" "$@"; then return 0; fi
+    if try_python "python" "$@"; then return 0; fi
     
-    # Method 2: Try running as Python module
-    if python3 -c "import codeweave" >/dev/null 2>&1; then
-        exec python3 -m codeweave "$@"
-    elif python -c "import codeweave" >/dev/null 2>&1; then
-        exec python -m codeweave "$@"
-    fi
+    # Method 2: Look for codeweave installations and try their environments
+    local codeweave_paths
+    mapfile -t codeweave_paths < <(find_codeweave_installations)
     
-    # Method 3: If all else fails, show helpful error
-    echo "Error: CodeWeave is not installed or not found in PATH"
+    for codeweave_path in "${codeweave_paths[@]}"; do
+        if [[ -n "$codeweave_path" ]]; then
+            # Try the virtual environment in the project directory
+            if [[ -f "$codeweave_path/env/bin/python" ]]; then
+                if "$codeweave_path/env/bin/python" -c "import codeweave" >/dev/null 2>&1; then
+                    exec "$codeweave_path/env/bin/python" -m codeweave "$@"
+                fi
+            fi
+            
+            # Try running directly from the project directory
+            if [[ -f "$codeweave_path/codeweave/main.py" ]]; then
+                cd "$codeweave_path" || continue
+                
+                # Try with different Python commands in the project directory
+                if try_python "python3" "$@"; then return 0; fi
+                if try_python "python" "$@"; then return 0; fi
+                
+                # Try running the main.py directly
+                if command -v python3 >/dev/null 2>&1; then
+                    export PYTHONPATH="$codeweave_path:$PYTHONPATH"
+                    if python3 -c "import codeweave" >/dev/null 2>&1; then
+                        exec python3 -m codeweave "$@"
+                    fi
+                fi
+            fi
+        fi
+    done
+    
+    # Method 3: If all else fails, show helpful error with context
+    echo "Error: CodeWeave is not installed or not accessible"
     echo ""
-    echo "To install CodeWeave:"
-    echo "  cd /path/to/codeweave && make install"
+    echo "Searched for CodeWeave installations in:"
+    for path in "${codeweave_paths[@]}"; do
+        if [[ -n "$path" ]]; then
+            echo "  - $path"
+        fi
+    done
     echo ""
-    echo "Or install manually:"
-    echo "  pip install ."
+    echo "To install CodeWeave globally:"
+    echo "  pip install codeweave"
+    echo ""
+    echo "Or install from source:"
+    echo "  cd /path/to/github2file && pip install ."
+    echo ""
+    echo "Or run from project directory:"
+    echo "  cd /path/to/github2file && python -m codeweave <args>"
+    echo ""
+    echo "Debug: Check if codeweave is importable:"
+    echo "  python3 -c 'import codeweave; print(codeweave.__file__)'"
     exit 1
 }
 

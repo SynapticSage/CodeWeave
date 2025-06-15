@@ -1,35 +1,87 @@
 # CodeWeave
 
-[![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+<div align="center">
+  <img src="assets/logo.png" alt="CodeWeave Logo" width="200" height="200">
+  
+  [![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+  [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+</div>
 
 CodeWeave is a powerful command-line tool that intelligently aggregates source code from GitHub repositories, local zip files, or directories, weaving them into organized, AI-ready output files. Perfect for code analysis, documentation, and AI-assisted development workflows.
 
 ## Quick Start
 
 ```bash
-# Process current directory for Python files
+# Process current directory for Python files with rich progress bars
 codeweave . --lang python
 
-# Download and process a GitHub repository  
+# Download and process a GitHub repository with beautiful terminal output
 codeweave https://github.com/user/repo --lang python,markdown
 
-# Process with file tree and exclude common directories
+# Process with file tree and exclude common directories - works from anywhere!
 codeweave /path/to/project --lang python --tree --excluded_dirs .venv,node_modules
 ```
 
 ## Features
 
-- **Multiple Input Sources**: Process GitHub repositories, local zip files, or directories
-- **Smart Language Detection**: Support for 15+ programming languages and file types
-- **Advanced Filtering**: Include/exclude specific directories, files, and patterns
-- **Performance Optimized**: Fast directory traversal that skips excluded directories entirely
-- **File Tree Generation**: Visual directory structure with exclusion support
-- **Content Processing**: Remove comments, convert notebooks, extract PDF text
-- **External Program Integration**: Run custom commands on specific file types
-- **Code Summarization**: Generate summaries using Fabric integration
-- **Output Control**: Copy to clipboard, append names, preview top N lines
-- **Developer Friendly**: Debug logging, grouped CLI options, extensive customization
+- **🎨 Rich Terminal Experience**: Beautiful progress bars, colored output, and structured information display
+- **🧠 Smart Global Script**: Works from any directory with intelligent environment detection
+- **📁 Multiple Input Sources**: Process GitHub repositories, local zip files, or directories
+- **🔍 Smart Language Detection**: Support for 15+ programming languages and file types
+- **⚡ Performance Optimized**: Fast directory traversal that skips excluded directories entirely
+- **🌳 File Tree Generation**: Visual directory structure with exclusion support
+- **🛠️ Advanced Filtering**: Include/exclude specific directories, files, and patterns
+- **📝 Content Processing**: Remove comments, convert notebooks, extract PDF text
+- **🔧 External Program Integration**: Run custom commands on specific file types
+- **📊 Code Summarization**: Generate summaries using Fabric integration
+- **📋 Output Control**: Copy to clipboard, append names, preview top N lines
+- **👨‍💻 Developer Friendly**: Debug logging, grouped CLI options, extensive customization
+
+## ✨ Rich Terminal Experience
+
+CodeWeave features a beautiful, modern terminal interface that makes code processing a pleasure:
+
+### 🎨 Visual Features
+- **📊 Rich Progress Bars**: Real-time progress with file counts, processing speed, and time remaining
+- **🎯 Smart Status Display**: Color-coded messages with clear visual hierarchy
+- **📋 Configuration Summary**: Elegant table showing all your processing settings
+- **✅ Completion Reports**: Detailed summary with file size, statistics, and success indicators
+- **🌈 Syntax Highlighting**: Enhanced error messages and debugging output
+
+### 🚀 User Experience
+- **📱 Live Updates**: See exactly which file is being processed in real-time  
+- **⏱️ Time Estimates**: Know how long large operations will take
+- **🎛️ Front Matter Display**: Clear overview of what's being processed before it starts
+- **📈 Processing Statistics**: Track files processed, skipped, and total progress
+- **🎨 Modern Design**: Professional appearance that's easy on the eyes
+
+### Example Output
+```
+╭─────────────────────────────────────────────────╮
+│ CodeWeave - Intelligent source code aggregation │
+╰─────────────────────────────────────────────────╯
+                    Processing Configuration                    
+┏━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Setting            ┃ Value                                  ┃
+┡━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ Input Type         │ Local Folder                           │
+│ Source             │ /path/to/your/project                  │
+│ Languages          │ python, markdown                       │
+│ Output File        │ project_python,markdown.txt            │
+└────────────────────┴────────────────────────────────────────┘
+
+Processing folder...
+⠋ Scanning: src                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━             
+⠋ Processing: main.py...           ━━━━━━━━━━━━━━━━━━━           68% 0:00:02
+
+╭────────────────────────────────── Summary ───────────────────────────────────╮
+│ ✓ Processing Complete!                                                       │
+│                                                                              │
+│ Output File: outputs/project_python,markdown.txt                             │
+│ File Size: 2.45 MB (2,567,890 bytes)                                         │
+│ Languages: python, markdown                                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+```
 
 ## Installation
 
@@ -38,10 +90,16 @@ codeweave /path/to/project --lang python --tree --excluded_dirs .venv,node_modul
 ```bash
 git clone https://github.com/user/codeweave.git
 cd codeweave
-make install-global
+make setup
 ```
 
-This installs CodeWeave and creates a global `codeweave` command you can use anywhere.
+This installs CodeWeave, creates a global `codeweave` command, and adds a `g2f` alias for backward compatibility.
+
+**Alternative installations:**
+```bash
+make setup-basic    # Install without g2f alias
+make install-global # Install global command only
+```
 
 ### Manual Installation Options
 
@@ -66,9 +124,12 @@ pip install git+https://github.com/user/codeweave.git
 
 ### Usage After Installation
 
-- **Global command:** `codeweave <path>` (after `make install-global`)
-- **Python module:** `python -m codeweave <path>`
-- **Short alias:** `cw <path>` (available after pip install)
+- **🌍 Global command:** `codeweave <path>` - Works from any directory with smart environment detection
+- **⚡ Legacy alias:** `g2f <path>` (after `make shell-alias` or `make setup`)
+- **📦 Short alias:** `cw <path>` (available after pip install)
+- **🐍 Python module:** `python -m codeweave <path>`
+
+**Note:** The global `codeweave` command uses intelligent environment detection to automatically find your CodeWeave installation, even when you're in different directories or using different Python environments!
 
 ## Supported Languages and File Types
 
@@ -352,6 +413,19 @@ Options are organized into logical groups:
 **PDF text extraction fails**
 - Ensure `pdfminer` is installed: `pip install pdfminer.six`
 - Some PDFs may not support text extraction
+
+**Global `codeweave` command not found or not working**
+- The smart global script automatically detects your CodeWeave installation
+- It searches common locations: `~/Code/repos/github2file`, `~/github2file`, etc.
+- Uses virtual environments when found: `~/Code/repos/github2file/env/bin/python`
+- To debug: Run `which codeweave` to see if installed, then check error messages
+- Manual install: `sudo make global-script` from the project directory
+
+**"CodeWeave is not installed or not accessible" error**
+- The global script tried multiple locations but couldn't find a working installation
+- Try: `python3 -c "import codeweave; print(codeweave.__file__)"` to check if available
+- Install globally: `pip install .` from the project directory  
+- Or run directly: `cd /path/to/github2file && python -m codeweave <args>`
 
 ## Contributing
 

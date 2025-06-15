@@ -22,6 +22,7 @@ setup(
         'nbformat',
         'nbconvert',
         'pdfminer.six',
+        'rich',
     ],
     tests_require=['pytest'],
     test_suite='pytest',
