@@ -15,6 +15,9 @@ CodeWeave is a powerful command-line tool that intelligently aggregates source c
 # Process current directory for Python files with rich progress bars
 codeweave . --lang python
 
+# AI-powered: Generate commands from natural language
+codeweave --prompt "extract python files excluding tests and virtual environments"
+
 # Download and process a GitHub repository with beautiful terminal output
 codeweave https://github.com/user/repo --lang python,markdown
 
@@ -22,20 +25,32 @@ codeweave https://github.com/user/repo --lang python,markdown
 codeweave /path/to/project --lang python --tree --excluded_dirs .venv,node_modules
 ```
 
-## Features
+## 🚀 Key Features
 
-- **🎨 Rich Terminal Experience**: Beautiful progress bars, colored output, and structured information display
-- **🧠 Smart Global Script**: Works from any directory with intelligent environment detection
-- **📁 Multiple Input Sources**: Process GitHub repositories, local zip files, or directories
-- **🔍 Smart Language Detection**: Support for 15+ programming languages and file types
-- **⚡ Performance Optimized**: Fast directory traversal that skips excluded directories entirely
-- **🌳 File Tree Generation**: Visual directory structure with exclusion support
-- **🛠️ Advanced Filtering**: Include/exclude specific directories, files, and patterns
-- **📝 Content Processing**: Remove comments, convert notebooks, extract PDF text
-- **🔧 External Program Integration**: Run custom commands on specific file types
-- **📊 Code Summarization**: Generate summaries using Fabric integration
-- **📋 Output Control**: Copy to clipboard, append names, preview top N lines
-- **👨‍💻 Developer Friendly**: Debug logging, grouped CLI options, extensive customization
+### 📁 Input & Processing
+- **Multiple Sources**: GitHub repos, ZIP files, local directories
+- **Smart Language Detection**: 15+ programming languages and file types
+- **Performance Optimized**: Fast traversal that skips excluded directories
+- **Advanced Filtering**: Include/exclude patterns for directories and files
+
+### 🎨 User Experience  
+- **Rich Terminal Interface**: Beautiful progress bars and colored output
+- **Global Script**: Works from any directory with environment detection
+- **File Tree Generation**: Visual directory structure with exclusions
+- **Real-time Progress**: Live updates with time estimates and statistics
+
+### 🛠️ Advanced Features
+- **Content Processing**: Remove comments, convert notebooks, extract PDF text
+- **External Programs**: Run custom commands on specific file types
+- **Code Summarization**: Generate summaries using Fabric integration
+- **Output Control**: Clipboard copy, naming, preview options
+- **Developer Tools**: Debug logging, grouped CLI options, extensibility
+
+### 🤖 AI-Powered Command Generation
+- **Natural Language Processing**: Convert plain English to CodeWeave commands
+- **Multi-Provider Support**: OpenAI, Anthropic, OpenRouter via LiteLLM
+- **Smart Auto-Detection**: Automatically recognizes natural language vs paths
+- **Interactive Confirmation**: Preview and approve generated commands
 
 ## ✨ Rich Terminal Experience
 
@@ -95,6 +110,22 @@ make setup
 
 This installs CodeWeave, creates a global `codeweave` command, and adds a `g2f` alias for backward compatibility.
 
+### AI-Powered Features (Optional)
+
+For natural language command generation, install AI dependencies:
+
+```bash
+# Recommended: Full AI provider support via LiteLLM
+pip install codeweave[ai]
+
+# Alternative: Basic AI support via OpenAI SDK
+pip install codeweave[ai-basic]
+
+# Manual installation
+pip install litellm  # Preferred - supports all providers
+pip install openai   # Fallback - OpenAI/OpenRouter only
+```
+
 **Alternative installations:**
 ```bash
 make setup-basic    # Install without g2f alias
@@ -152,6 +183,58 @@ CodeWeave supports the following languages and file types:
 - **MATLAB** (`.m`)
 - **Shell** (`.sh`)
 - **TOML** (`.toml`)
+
+## 🤖 AI Integration
+
+### Natural Language Command Generation
+
+CodeWeave can generate commands from plain English descriptions, making it easier to use complex options.
+
+#### Configuration
+
+Set up your AI provider via environment variables:
+
+```bash
+# Primary configuration
+export CODEWEAVE_API_KEY="your_api_key_here"
+export CODEWEAVE_AI_PROVIDER="openrouter"  # openrouter|openai|anthropic
+export CODEWEAVE_AI_MODEL="openai/gpt-4"   # specific model (optional)
+
+# Provider-specific keys (fallback)
+export OPENROUTER_API_KEY="your_openrouter_key"
+export OPENAI_API_KEY="your_openai_key" 
+export ANTHROPIC_API_KEY="your_anthropic_key"
+```
+
+#### Usage Examples
+
+**Explicit Prompt Mode:**
+```bash
+# Generate command from description
+codeweave --prompt "extract all python files but skip tests and virtual environments"
+# Generated: codeweave . --lang python --excluded_dirs tests,test,.venv,venv
+
+# Specify AI provider and model
+codeweave --prompt "get markdown and python files with file tree" --ai-provider anthropic --ai-model claude-3-sonnet
+
+# Skip confirmation (auto-execute)
+codeweave --prompt "process github repo for javascript" --no-confirm
+```
+
+**Auto-Detection Mode:**
+```bash
+# CodeWeave automatically detects natural language vs paths
+codeweave "analyze this project for Python code excluding tests"
+codeweave "download repo and get all JavaScript files with tree structure"
+codeweave "extract markdown files from current directory"
+```
+
+**AI Provider Options:**
+- `--ai-provider openrouter` (default) - Access 100+ models via OpenRouter
+- `--ai-provider openai` - Direct OpenAI API access  
+- `--ai-provider anthropic` - Direct Anthropic API access
+- `--ai-model model-name` - Specify exact model (e.g., gpt-4, claude-3-sonnet)
+- `--no-confirm` - Skip confirmation and run generated command directly
 
 ## Usage
 
@@ -213,6 +296,13 @@ codeweave --zip /path/to/archive.zip
 - `--nosubstitute`: Show both program output AND file content when using `--program`. Without this flag (default behavior), only the program output will be shown instead of the file content.
 - `--summarize`: Generate a summary of the code using Fabric. Default is `False`.
 - `--fabric_args`: Arguments to pass to Fabric when using --summarize. Default is `literal`.
+
+#### AI Integration
+
+- `--prompt`: Generate CodeWeave command from natural language description.
+- `--ai-provider`: AI provider to use for command generation (openrouter, openai, anthropic). Default is `openrouter`.
+- `--ai-model`: Specific AI model to use (e.g., gpt-4, claude-3-sonnet).
+- `--no-confirm`: Skip confirmation prompt and run generated command directly.
 
 #### Output Options
 
