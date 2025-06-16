@@ -10,3 +10,4 @@ github2file/.DS_Store
 outputs/
 test/test.pdf
 proposal.py
+codeweave.egg-info

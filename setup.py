@@ -24,6 +24,10 @@ setup(
         'pdfminer.six',
         'rich',
     ],
+    extras_require={
+        'ai': ['litellm>=1.0.0'],  # Preferred AI provider
+        'ai-basic': ['openai>=1.0.0'],  # Fallback AI provider
+    },
     tests_require=['pytest'],
     test_suite='pytest',
     author='Your Name',

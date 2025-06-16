@@ -29,6 +29,17 @@ from codeweave.utils.path import (
 from codeweave.utils.file import has_sufficient_content, remove_comments_and_docstrings
 from codeweave.utils.jupyter import convert_ipynb_to_py
 
+# Optional AI imports - only load if available
+try:
+    from codeweave.utils.ai import (
+        is_natural_language_input,
+        generate_codeweave_command,
+        confirm_and_execute_command,
+    )
+    AI_AVAILABLE = True
+except ImportError:
+    AI_AVAILABLE = False
+
 def setup_logging(debug_flag):
     """Setup logging configuration with rich handler."""
     log_level = logging.DEBUG if debug_flag else logging.INFO
@@ -427,6 +438,19 @@ def create_argument_parser():
     program_group.add_argument('--fabric_args', type=str, default='literal',
                         help='Arguments to pass to Fabric when using --summarize')
     
+    # AI integration group (always add, but show availability in help)
+    ai_status = "✅ Available" if AI_AVAILABLE else "❌ Install with: pip install codeweave[ai]"
+    ai_group = parser.add_argument_group(f'AI Integration ({ai_status})')
+    ai_group.add_argument('--prompt', type=str, 
+                        help='Generate CodeWeave command from natural language description')
+    ai_group.add_argument('--ai-provider', type=str, default='openrouter',
+                        choices=['openrouter', 'openai', 'anthropic'],
+                        help='AI provider to use for command generation (default: openrouter)')
+    ai_group.add_argument('--ai-model', type=str, 
+                        help='Specific AI model to use (e.g., gpt-4, claude-3-sonnet)')
+    ai_group.add_argument('--no-confirm', action='store_true', default=False,
+                        help='Skip confirmation prompt and run generated command directly')
+    
     # Output options group
     output_group = parser.add_argument_group('Output Options')
     output_group.add_argument('--name_append', type=str, help='Append this string to the output file name')
@@ -600,6 +624,62 @@ def main(args=None) -> str:
 
     logging.info("Starting the script")
     logging.debug(f"Arguments: {args}")
+
+    # Handle AI prompt mode (only if AI functionality is available)
+    if AI_AVAILABLE and (args.prompt or (args.input and is_natural_language_input(args.input))):
+        console = Console()
+        
+        # Determine the prompt text
+        prompt_text = args.prompt if args.prompt else args.input
+        
+        console.print(Panel(
+            f"[bold yellow]AI Command Generation[/bold yellow]\n\n"
+            f"[cyan]Prompt:[/cyan] {prompt_text}",
+            title="CodeWeave AI",
+            border_style="yellow"
+        ))
+        
+        # Generate command using AI
+        provider = getattr(args, 'ai_provider', 'openrouter')
+        model = getattr(args, 'ai_model', None) 
+        no_confirm = getattr(args, 'no_confirm', False)
+        
+        generated_command = generate_codeweave_command(prompt_text, provider, model)
+        
+        if not generated_command:
+            console.print("[red]Failed to generate command. Please try again or use manual command.[/red]")
+            return None
+        
+        # Ask for confirmation and execute
+        if confirm_and_execute_command(generated_command, no_confirm):
+            console.print("[green]Executing generated command...[/green]")
+            # Parse the generated command and execute it
+            import shlex
+            try:
+                # Remove 'codeweave' prefix and parse arguments
+                cmd_args = shlex.split(generated_command)
+                if cmd_args[0] == 'codeweave':
+                    cmd_args = cmd_args[1:]
+                
+                # Recursively call main with generated arguments
+                return main(cmd_args)
+            except Exception as e:
+                console.print(f"[red]Error executing generated command: {e}[/red]")
+                return None
+        else:
+            console.print("[yellow]Command execution cancelled.[/yellow]")
+            return None
+    elif args.prompt and not AI_AVAILABLE:
+        console = Console()
+        console.print(Panel(
+            "[red]AI functionality not available![/red]\n\n"
+            "Install AI dependencies:\n"
+            "• [cyan]pip install codeweave[ai][/cyan] (recommended)\n"
+            "• [cyan]pip install codeweave[ai-basic][/cyan] (basic)",
+            title="Missing AI Dependencies",
+            border_style="red"
+        ))
+        return None
 
     try:
         # Process excluded directories
