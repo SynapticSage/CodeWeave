@@ -171,11 +171,12 @@ Rules:
 1. Generate ONLY the command, no explanation
 2. Use appropriate flags based on the user's description
 3. If they mention specific languages, use --lang
-4. If they want to exclude directories, use --excluded_dirs
-5. If they want file trees, use --tree
-6. For GitHub repos, detect URLs or assume they mean a repo
-7. Use . for current directory if no path specified
-8. Always provide a complete, runnable command starting with 'codeweave'
+4. If they mention specific file extensions (like .tsx, .vue), include them with the dot in --lang
+5. If they want to exclude directories, use --excluded_dirs
+6. If they want file trees, use --tree
+7. For GitHub repos, detect URLs or assume they mean a repo
+8. Use . for current directory if no path specified
+9. Always provide a complete, runnable command starting with 'codeweave'
 
 Examples:
 Input: "extract all python files from current directory"
@@ -186,6 +187,12 @@ Output: codeweave <repo_url> --lang js,typescript --tree
 
 Input: "get python code excluding tests and virtual environments"
 Output: codeweave . --lang python --excluded_dirs tests,test,.venv,venv
+
+Input: "analyze React project with TypeScript and TSX files"
+Output: codeweave . --lang typescript,.tsx
+
+Input: "extract Vue and JavaScript files from my project"
+Output: codeweave . --lang javascript,.vue
 """
 
     try:
@@ -287,7 +294,7 @@ Input Sources:
   --folder FOLDER       Path to the local folder
 
 File Selection & Filtering:
-  --lang LANG           Programming language(s) (comma-separated, e.g., python,pdf)
+  --lang LANG           Programming language(s), format(s), or file extension(s) (comma-separated, e.g., python,javascript,.tsx,.vue)
   --include INCLUDE     Comma-separated list of subfolders/patterns to focus on
   --exclude EXCLUDE     Comma-separated list of file patterns to exclude
   --excluded_dirs DIRS  Comma-separated list of directories to exclude

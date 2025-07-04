@@ -52,14 +52,28 @@ def setup_logging(debug_flag):
 
 def download_repo(args, output_file_path):
     """Download and process files from a GitHub repository."""
+    import tempfile
+    
     download_url = f"{args.repo}/archive/refs/heads/{args.branch_or_tag}.zip"
 
     logging.info(f"Download URL: {download_url}")
     response = requests.get(download_url)
 
     if response.status_code == 200:
-        zip_obj = zipfile.ZipFile(io.BytesIO(response.content))
-        process_zip_object(zip_obj, args, output_file_path)
+        # Save to temporary file in /tmp
+        with tempfile.NamedTemporaryFile(mode='wb', suffix='.zip', dir='/tmp', delete=False) as temp_zip:
+            temp_zip.write(response.content)
+            temp_path = temp_zip.name
+            logging.debug(f"Downloaded ZIP saved to temporary file: {temp_path}")
+        
+        # Process the ZIP file
+        with zipfile.ZipFile(temp_path, 'r') as zip_obj:
+            collected_extensions = set()
+            process_zip_object(zip_obj, args, output_file_path, collected_extensions)
+            args.collected_extensions = collected_extensions
+        
+        # Note: We don't delete the temp file - let the OS clean it up from /tmp
+        logging.debug("Temporary ZIP file left in /tmp for OS cleanup")
     else:
         logging.error(f"Failed to download the repository. Status code: {response.status_code}")
         sys.exit(1)
@@ -67,11 +81,16 @@ def download_repo(args, output_file_path):
 def process_zip(args: argparse.Namespace, output_file_path=None):
     """Process files from a local .zip file."""
     with zipfile.ZipFile(args.zip, 'r') as zip_obj:
-        process_zip_object(zip_obj, args, output_file_path)
+        collected_extensions = set()
+        process_zip_object(zip_obj, args, output_file_path, collected_extensions)
+        args.collected_extensions = collected_extensions
 
-def process_zip_object(zip_obj, args: argparse.Namespace, output_file_path=None):
+def process_zip_object(zip_obj, args: argparse.Namespace, output_file_path=None, collected_extensions=None):
     """Process files from a local .zip file."""
     console = Console()
+    
+    if collected_extensions is None:
+        collected_extensions = set()
     
     # Use args.output_file_path if output_file_path is not provided
     if output_file_path is None and hasattr(args, "output_file_path"):
@@ -123,6 +142,11 @@ def process_zip_object(zip_obj, args: argparse.Namespace, output_file_path=None)
 
                 logging.debug(f"Processing file: {file_path}")
                 
+                # Collect file extension
+                _, ext = os.path.splitext(file_path)
+                if ext:
+                    collected_extensions.add(ext.lower())
+                
                 # --- Run program on specific filetype if requested ---
                 program_output = None
                 if program_filetype and program_command:
@@ -139,7 +163,6 @@ def process_zip_object(zip_obj, args: argparse.Namespace, output_file_path=None)
                         logging.debug(f"Program output for {file_path}: {program_output}")
                         
                         # Clean up the temporary file
-                        import os
                         os.unlink(temp_path)
                         
                         # Need to re-read the file since we've consumed it
@@ -207,6 +230,9 @@ def process_folder(args: argparse.Namespace, output_file_path):
        filtering criteria.
     3) Optionally runs a program on each file of a specific filetype.
     """
+    
+    # Initialize collected extensions
+    collected_extensions = set()
     
     # Parse the program argument if provided
     program_filetype = None
@@ -314,6 +340,11 @@ def process_folder(args: argparse.Namespace, output_file_path):
                     continue
 
                 # Note: Directory exclusion now handled at folder level above
+                
+                # Collect file extension
+                _, ext = os.path.splitext(file_path)
+                if ext:
+                    collected_extensions.add(ext.lower())
                     
                 # --- 3) Run program on specific filetype if requested ---
                 program_output = None
@@ -389,6 +420,9 @@ def process_folder(args: argparse.Namespace, output_file_path):
 
                 mode = 'a'
                 progress.advance(file_task)
+    
+    # Store collected extensions in args
+    args.collected_extensions = collected_extensions
 
 def create_argument_parser():
     parser = argparse.ArgumentParser(description='CodeWeave - Intelligent source code aggregation and AI workflow optimization')
@@ -405,7 +439,7 @@ def create_argument_parser():
     # File selection and filtering group
     filter_group = parser.add_argument_group('File Selection & Filtering')
     filter_group.add_argument('--lang', type=str, default='python', 
-                       help='The programming language(s) and format(s) of the repository (comma-separated, e.g., python,pdf)')
+                       help='Programming language(s), format(s), or file extension(s) (comma-separated, e.g., python,javascript,.tsx,.vue)')
     filter_group.add_argument('--include', type=str, help='Comma-separated list of subfolders/patterns to focus on')
     filter_group.add_argument('--exclude', type=str, help='Comma-separated list of file patterns to exclude')
     filter_group.add_argument('--excluded_dirs', '--exclude_dir', type=str, 
@@ -488,8 +522,15 @@ def check_for_include_override(include_list, exclude_list):
 def add_new_extension(languages):
     """Add new language extensions to the file_extension_dict"""
     for lang in languages:
-        if lang not in file_extension_dict:
-            logging.info("Adding new extension to the dictionary")
+        if lang.startswith('.'):
+            # Direct extension provided
+            extension_key = lang[1:]  # Remove the dot for the key
+            if extension_key not in file_extension_dict:
+                logging.info(f"Adding extension {lang} to the dictionary")
+                file_extension_dict[extension_key] = [lang]
+        elif lang not in file_extension_dict:
+            # Assume it's a new language with .lang extension
+            logging.info(f"Adding new extension .{lang} to the dictionary")
             file_extension_dict[lang] = [f'.{lang}']
 
 def parse_program_arg(program_arg):
@@ -586,15 +627,46 @@ def display_completion_summary(output_file_path, args):
         file_size_mb = file_size / (1024 * 1024)
         
         # Create completion summary
-        summary_panel = Panel(
+        summary_text = (
             f"[bold green]✓ Processing Complete![/bold green]\n\n"
             f"[cyan]Output File:[/cyan] {output_file_path}\n"
             f"[cyan]File Size:[/cyan] {file_size_mb:.2f} MB ({file_size:,} bytes)\n"
-            f"[cyan]Languages:[/cyan] {', '.join(args.lang) if args.lang else 'All detected'}",
+            f"[cyan]Languages:[/cyan] {', '.join(args.lang) if args.lang else 'All detected'}"
+        )
+        
+        # Add extension information if available
+        if hasattr(args, 'collected_extensions') and args.collected_extensions:
+            extensions = sorted(args.collected_extensions)
+            extension_count = len(extensions)
+            summary_text += f"\n[cyan]Unique Extensions:[/cyan] {extension_count}"
+            
+            # Show extensions in a formatted way
+            if extension_count <= 20:
+                # Show all extensions if 20 or fewer
+                summary_text += f"\n[dim]{', '.join(extensions)}[/dim]"
+            else:
+                # Show first 20 and indicate there are more
+                shown_exts = extensions[:20]
+                summary_text += f"\n[dim]{', '.join(shown_exts)}, and {extension_count - 20} more...[/dim]"
+        
+        summary_panel = Panel(
+            summary_text,
             title="[bold]Summary[/bold]",
             border_style="green"
         )
         console.print(summary_panel)
+        
+        # If there are many extensions, show them in a separate table
+        if hasattr(args, 'collected_extensions') and len(args.collected_extensions) > 20:
+            ext_table = Table(title="All File Extensions Found", show_header=True, header_style="bold cyan")
+            ext_table.add_column("Extensions", style="dim")
+            
+            # Group extensions into rows of 10 for better display
+            extensions = sorted(args.collected_extensions)
+            for i in range(0, len(extensions), 10):
+                ext_table.add_row(', '.join(extensions[i:i+10]))
+            
+            console.print(ext_table)
         
         if args.pbcopy:
             console.print("[yellow]📋 Output copied to clipboard[/yellow]")
@@ -744,6 +816,9 @@ def main(args=None) -> str:
         if os.path.exists(output_file_path):
             logging.info(f"Output file {output_file_path} already exists. Removing it.")
             os.remove(output_file_path)
+
+        # Initialize collected_extensions to ensure it's always available
+        args.collected_extensions = set()
 
         if args.repo:
             console = Console()
