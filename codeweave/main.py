@@ -15,6 +15,7 @@ from rich.table import Table
 from rich.text import Text
 from rich.logging import RichHandler
 from rich import print as rprint
+from rich.prompt import Prompt, Confirm
 
 from codeweave.utils.path import (
     should_exclude_file,
@@ -28,6 +29,22 @@ from codeweave.utils.path import (
 )
 from codeweave.utils.file import has_sufficient_content, remove_comments_and_docstrings
 from codeweave.utils.jupyter import convert_ipynb_to_py
+
+# Common binary file extensions
+BINARY_EXTENSIONS = {
+    '.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico', '.svg',  # Images
+    '.mp3', '.mp4', '.avi', '.mov', '.wav',  # Audio/Video
+    '.zip', '.tar', '.gz', '.rar', '.7z',  # Archives
+    '.exe', '.dll', '.so', '.dylib',  # Executables
+    '.pdf', '.doc', '.docx', '.xls', '.xlsx',  # Documents (except PDF which has special handling)
+    '.pyc', '.pyo', '.class',  # Compiled files
+    '.db', '.sqlite', '.pickle',  # Data files
+}
+
+def is_binary_file(file_path):
+    """Check if a file is likely binary based on its extension."""
+    _, ext = os.path.splitext(file_path.lower())
+    return ext in BINARY_EXTENSIONS
 
 # Optional AI imports - only load if available
 try:
@@ -50,8 +67,14 @@ def setup_logging(debug_flag):
         handlers=[RichHandler(rich_tracebacks=True)]
     )
 
-def download_repo(args, output_file_path):
-    """Download and process files from a GitHub repository."""
+def download_repo(args, output_file_path, scan_only=False):
+    """Download and process files from a GitHub repository.
+    
+    Args:
+        args: Command line arguments
+        output_file_path: Path to write output
+        scan_only: If True, only scan for extensions without processing files
+    """
     import tempfile
     
     download_url = f"{args.repo}/archive/refs/heads/{args.branch_or_tag}.zip"
@@ -69,7 +92,7 @@ def download_repo(args, output_file_path):
         # Process the ZIP file
         with zipfile.ZipFile(temp_path, 'r') as zip_obj:
             collected_extensions = set()
-            process_zip_object(zip_obj, args, output_file_path, collected_extensions)
+            process_zip_object(zip_obj, args, output_file_path, collected_extensions, scan_only)
             args.collected_extensions = collected_extensions
         
         # Note: We don't delete the temp file - let the OS clean it up from /tmp
@@ -85,8 +108,16 @@ def process_zip(args: argparse.Namespace, output_file_path=None):
         process_zip_object(zip_obj, args, output_file_path, collected_extensions)
         args.collected_extensions = collected_extensions
 
-def process_zip_object(zip_obj, args: argparse.Namespace, output_file_path=None, collected_extensions=None):
-    """Process files from a local .zip file."""
+def process_zip_object(zip_obj, args: argparse.Namespace, output_file_path=None, collected_extensions=None, scan_only=False):
+    """Process files from a local .zip file.
+    
+    Args:
+        zip_obj: ZipFile object to process
+        args: Command line arguments
+        output_file_path: Path to write output
+        collected_extensions: Set to collect file extensions
+        scan_only: If True, only scan for extensions without processing files
+    """
     console = Console()
     
     if collected_extensions is None:
@@ -120,25 +151,32 @@ def process_zip_object(zip_obj, args: argparse.Namespace, output_file_path=None,
             for file_path in zip_obj.namelist():
                 progress.update(task, description=f"Processing: {os.path.basename(file_path)[:30]}...")
                 
-                if (file_path.endswith("/")
-                    or not is_file_type(file_path, args.lang)
-                    or not is_likely_useful_file(file_path, args.lang, args)
-                    or should_exclude_file(file_path, args)):
-                    progress.advance(task)
-                    continue
+                # During scan mode, we want to collect all extensions (skip directories only)
+                if not scan_only:
+                    if (file_path.endswith("/")
+                        or not is_file_type(file_path, args.lang)
+                        or not is_likely_useful_file(file_path, args.lang, args)
+                        or should_exclude_file(file_path, args)):
+                        progress.advance(task)
+                        continue
 
-                if args.include:
-                    confirm_include = any(include in file_path for include in args.include)
+                    if args.include:
+                        confirm_include = any(include in file_path for include in args.include)
+                        if not confirm_include:
+                            logging.debug(f"Skipping file: {file_path}")
+                            progress.advance(task)
+                            continue
+                    else:
+                        # Default to include
+                        confirm_include = True
                     if not confirm_include:
-                        logging.debug(f"Skipping file: {file_path}")
                         progress.advance(task)
                         continue
                 else:
-                    # Default to include
-                    confirm_include = True
-                if not confirm_include:
-                    progress.advance(task)
-                    continue
+                    # In scan mode, skip directories only
+                    if file_path.endswith("/"):
+                        progress.advance(task)
+                        continue
 
                 logging.debug(f"Processing file: {file_path}")
                 
@@ -146,6 +184,11 @@ def process_zip_object(zip_obj, args: argparse.Namespace, output_file_path=None,
                 _, ext = os.path.splitext(file_path)
                 if ext:
                     collected_extensions.add(ext.lower())
+                
+                # If we're only scanning for extensions, skip the rest
+                if scan_only:
+                    progress.advance(task)
+                    continue
                 
                 # --- Run program on specific filetype if requested ---
                 program_output = None
@@ -168,6 +211,12 @@ def process_zip_object(zip_obj, args: argparse.Namespace, output_file_path=None,
                         # Need to re-read the file since we've consumed it
                         zip_obj.open(file_path)
                 
+                # Skip binary files (except PDF which has special handling)
+                if is_binary_file(file_path) and not (file_path.endswith('.pdf') and 'pdf' in args.lang):
+                    logging.debug(f"Skipping binary file: {file_path}")
+                    progress.advance(task)
+                    continue
+                
                 if file_path.endswith('.pdf') and 'pdf' in args.lang:
                     if args.pdf_text_mode:
                         file_content = extract_text(io.BytesIO(zip_obj.read(file_path)))
@@ -179,7 +228,12 @@ def process_zip_object(zip_obj, args: argparse.Namespace, output_file_path=None,
                     file_content = zip_obj.read(file_path).decode("utf-8")
                     file_content = convert_ipynb_to_py(file_content)
                 else:
-                    file_content = zip_obj.read(file_path).decode("utf-8")
+                    try:
+                        file_content = zip_obj.read(file_path).decode("utf-8")
+                    except UnicodeDecodeError:
+                        logging.debug(f"Skipping file due to encoding issues: {file_path}")
+                        progress.advance(task)
+                        continue
 
                 if any(is_test_file(file_content, lang) for lang in args.lang) or not has_sufficient_content(file_content):
                     progress.advance(task)
@@ -222,13 +276,18 @@ def process_zip_object(zip_obj, args: argparse.Namespace, output_file_path=None,
                 outfile.write("\n\n")
                 progress.advance(task)
 
-def process_folder(args: argparse.Namespace, output_file_path):
+def process_folder(args: argparse.Namespace, output_file_path, scan_only=False):
     """
     Processes a local folder: 
     1) Optionally prepends a file tree (via the 'tree' command).
     2) Gathers and writes out source files that match the user's language and 
        filtering criteria.
     3) Optionally runs a program on each file of a specific filetype.
+    
+    Args:
+        args: Command line arguments
+        output_file_path: Path to write output
+        scan_only: If True, only scan for extensions without processing files
     """
     
     # Initialize collected extensions
@@ -245,7 +304,7 @@ def process_folder(args: argparse.Namespace, output_file_path):
             logging.error("Invalid program format, ignoring --program option")
 
     # --- 1) Generate a file tree using the 'tree' command, applying exclusions ---
-    if args.tree:
+    if args.tree and not scan_only:
         tree_cmd = ['tree']
 
         # If the user passed extra flags via --tree_flags, add them here
@@ -325,19 +384,21 @@ def process_folder(args: argparse.Namespace, output_file_path):
                 file_path = os.path.join(root, file)
                 progress.update(file_task, description=f"Processing: {os.path.basename(file_path)[:30]}...")
 
-                # Build your dictionary of "skip" conditions
-                we_should_examine = {
-                    'bad filetype': not is_file_type(file, args.lang),
-                    'not useful': not any(is_likely_useful_file(file, lang, args) for lang in args.lang),
-                    'should exclude': should_exclude_file(file, args),
-                    'inclusion violate': inclusion_violate(file, args),
-                }
+                # During scan mode, we want to collect all extensions
+                if not scan_only:
+                    # Build your dictionary of "skip" conditions
+                    we_should_examine = {
+                        'bad filetype': not is_file_type(file, args.lang),
+                        'not useful': not any(is_likely_useful_file(file, lang, args) for lang in args.lang),
+                        'should exclude': should_exclude_file(file, args),
+                        'inclusion violate': inclusion_violate(file, args),
+                    }
 
-                if reduce(ior, we_should_examine.values()):
-                    logging.debug(f'Skipping file: {file_path}')
-                    logging.debug(f'Reasons: {we_should_examine}')
-                    progress.advance(file_task)
-                    continue
+                    if reduce(ior, we_should_examine.values()):
+                        logging.debug(f'Skipping file: {file_path}')
+                        logging.debug(f'Reasons: {we_should_examine}')
+                        progress.advance(file_task)
+                        continue
 
                 # Note: Directory exclusion now handled at folder level above
                 
@@ -345,6 +406,17 @@ def process_folder(args: argparse.Namespace, output_file_path):
                 _, ext = os.path.splitext(file_path)
                 if ext:
                     collected_extensions.add(ext.lower())
+                
+                # If we're only scanning for extensions, skip the rest
+                if scan_only:
+                    progress.advance(file_task)
+                    continue
+                    
+                # Skip binary files (except PDF which has special handling)
+                if is_binary_file(file_path) and not (file_path.endswith('.pdf') and 'pdf' in args.lang):
+                    logging.debug(f"Skipping binary file: {file_path}")
+                    progress.advance(file_task)
+                    continue
                     
                 # --- 3) Run program on specific filetype if requested ---
                 program_output = None
@@ -364,8 +436,13 @@ def process_folder(args: argparse.Namespace, output_file_path):
                         # Just indicate this is a PDF file but don't extract text
                         file_content = "[PDF file - use --pdf_text_mode to extract text]"
                 else:
-                    with open(file_path, 'r', encoding='utf-8') as f:
-                        file_content = f.read()
+                    try:
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            file_content = f.read()
+                    except UnicodeDecodeError:
+                        logging.debug(f"Skipping file due to encoding issues: {file_path}")
+                        progress.advance(file_task)
+                        continue
 
                 # Skip test files or short/empty files
                 if any(is_test_file(file_content, lang) for lang in args.lang) or not has_sufficient_content(file_content):
@@ -438,13 +515,15 @@ def create_argument_parser():
     
     # File selection and filtering group
     filter_group = parser.add_argument_group('File Selection & Filtering')
-    filter_group.add_argument('--lang', type=str, default='python', 
-                       help='Programming language(s), format(s), or file extension(s) (comma-separated, e.g., python,javascript,.tsx,.vue)')
+    filter_group.add_argument('--lang', type=str, default=None, 
+                       help='Programming language(s), format(s), or file extension(s) (comma-separated, e.g., python,javascript,.tsx,.vue). If not specified, interactive selection will be triggered.')
     filter_group.add_argument('--include', type=str, help='Comma-separated list of subfolders/patterns to focus on')
     filter_group.add_argument('--exclude', type=str, help='Comma-separated list of file patterns to exclude')
     filter_group.add_argument('--excluded_dirs', '--exclude_dir', type=str, 
                        help='Comma-separated list of directories to exclude',
                        default="docs,examples,tests,test,scripts,utils,benchmarks")
+    filter_group.add_argument('--interactive-extensions', action='store_true',
+                       help='Force interactive extension selection even when --lang is specified')
     
     # Content processing group
     content_group = parser.add_argument_group('Content Processing')
@@ -533,6 +612,110 @@ def add_new_extension(languages):
             logging.info(f"Adding new extension .{lang} to the dictionary")
             file_extension_dict[lang] = [f'.{lang}']
 
+def interactive_extension_selection(collected_extensions):
+    """
+    Interactively select file extensions to process.
+    
+    Args:
+        collected_extensions: Set of file extensions found during scanning
+        
+    Returns:
+        List of selected extensions or None if cancelled
+    """
+    console = Console()
+    
+    if not collected_extensions:
+        console.print("[yellow]No file extensions found during scan.[/yellow]")
+        return None
+    
+    # Sort and filter out binary extensions
+    all_extensions = sorted(collected_extensions)
+    extensions = [ext for ext in all_extensions if ext not in BINARY_EXTENSIONS]
+    
+    # Check if we have any non-binary extensions
+    if not extensions:
+        console.print("[yellow]No processable file extensions found. All discovered files are binary.[/yellow]")
+        console.print(f"[dim]Binary extensions found: {', '.join(all_extensions)}[/dim]")
+        return None
+    
+    # Display found extensions
+    binary_count = len(all_extensions) - len(extensions)
+    if binary_count > 0:
+        console.print(Panel(
+            f"[bold cyan]Found {len(all_extensions)} file extension(s), {len(extensions)} processable[/bold cyan]\n\n"
+            f"[dim]Processable: {', '.join(extensions)}[/dim]\n"
+            f"[dim]Binary (excluded): {binary_count} extension(s)[/dim]",
+            title="[bold]File Extensions Discovered[/bold]",
+            border_style="cyan"
+        ))
+    else:
+        console.print(Panel(
+            f"[bold cyan]Found {len(extensions)} processable file extension(s)[/bold cyan]\n\n"
+            f"[dim]{', '.join(extensions)}[/dim]",
+            title="[bold]File Extensions Discovered[/bold]",
+            border_style="cyan"
+        ))
+    
+    # Create a checklist-style interface
+    console.print("\n[bold]Select extensions to process:[/bold]")
+    console.print("[dim]Enter extension numbers separated by commas, ranges (e.g., 1-5), or 'all'[/dim]\n")
+    
+    # Display extensions with numbers
+    for i, ext in enumerate(extensions, 1):
+        # Try to find a language name for the extension
+        lang_names = []
+        for lang, exts in file_extension_dict.items():
+            if ext in exts:
+                lang_names.append(lang)
+        
+        lang_info = f" ({', '.join(lang_names)})" if lang_names else ""
+        console.print(f"  {i:3d}. {ext}{lang_info}")
+    
+    console.print()
+    
+    # Get user selection
+    while True:
+        selection = Prompt.ask("[cyan]Your selection[/cyan]", default="all").strip().lower()
+        
+        if selection == "all":
+            return extensions
+        
+        if selection == "none" or selection == "":
+            return []
+        
+        try:
+            selected_indices = set()
+            
+            # Parse comma-separated values and ranges
+            for part in selection.split(','):
+                part = part.strip()
+                if '-' in part:
+                    # Handle range
+                    start, end = part.split('-', 1)
+                    start_idx = int(start.strip())
+                    end_idx = int(end.strip())
+                    for idx in range(start_idx, end_idx + 1):
+                        if 1 <= idx <= len(extensions):
+                            selected_indices.add(idx)
+                else:
+                    # Handle single number
+                    idx = int(part)
+                    if 1 <= idx <= len(extensions):
+                        selected_indices.add(idx)
+            
+            if selected_indices:
+                selected_extensions = [extensions[i-1] for i in sorted(selected_indices)]
+                
+                # Confirm selection
+                console.print(f"\n[green]Selected extensions:[/green] {', '.join(selected_extensions)}")
+                if Confirm.ask("Proceed with these extensions?", default=True):
+                    return selected_extensions
+            else:
+                console.print("[red]No valid selections made. Please try again.[/red]")
+        
+        except (ValueError, IndexError):
+            console.print("[red]Invalid selection. Please enter numbers, ranges (1-5), or 'all'.[/red]")
+
 def parse_program_arg(program_arg):
     """Parse the program argument in the format 'filetype=command'"""
     if not program_arg or '=' not in program_arg:
@@ -594,7 +777,7 @@ def display_configuration_header(args):
     
     config_table.add_row("Input Type", input_type)
     config_table.add_row("Source", input_source)
-    config_table.add_row("Languages", ', '.join(args.lang) if args.lang else "All detected")
+    config_table.add_row("Languages", ', '.join(args.lang) if args.lang else "Interactive selection")
     config_table.add_row("Output File", getattr(args, 'output_file', 'Not set'))
     
     if args.excluded_dirs:
@@ -684,12 +867,13 @@ def main(args=None) -> str:
     args = parser.parse_args(args)
     if args.pdb_fromstart:
         import pdb; pdb.set_trace()
+    # Process language argument
     if args.lang:
         args.lang = [lang.strip() for lang in args.lang.split(',')]
+        add_new_extension(args.lang)
     else:
-        args.lang = set()  # Indicates special behavior where each encountered file extension is added to the set.
-
-    add_new_extension(args.lang)
+        # If no --lang specified, we'll use interactive mode
+        args.lang = []  # Empty list for now, will be populated by interactive selection
 
     # Setup logging early.
     setup_logging(args.debug)
@@ -784,9 +968,11 @@ def main(args=None) -> str:
             # Determine if the input is a URL, a .zip file, or a folder, and set the corresponding attribute.
             determine_if_url_zip_or_folder(args)
         if args.repo:
-            args.output_file = f"{args.repo.split('/')[-1]}_{','.join(args.lang)}.txt"
+            lang_suffix = ','.join(args.lang) if args.lang else 'selected'
+            args.output_file = f"{args.repo.split('/')[-1]}_{lang_suffix}.txt"
         elif args.zip:
-            args.output_file = f"{os.path.splitext(os.path.basename(args.zip))[0]}_{','.join(args.lang)}.txt"
+            lang_suffix = ','.join(args.lang) if args.lang else 'selected'
+            args.output_file = f"{os.path.splitext(os.path.basename(args.zip))[0]}_{lang_suffix}.txt"
         elif args.folder:
             args.folder = os.path.abspath(os.path.expanduser(args.folder))
             gitfolder = extract_git_folder(args.folder)
@@ -795,7 +981,8 @@ def main(args=None) -> str:
             check_for_include_override(args.folder.split('/'), args.excluded_dirs)
             if not gitfolder:
                 logging.warning("No git folder found in the path")
-            args.output_file = f"{folder}_{','.join(args.lang)}.txt"
+            lang_suffix = ','.join(args.lang) if args.lang else 'selected'
+            args.output_file = f"{folder}_{lang_suffix}.txt"
         else:
             raise ValueError("Input not recognized as a URL, a .zip file, or a folder")
 
@@ -820,9 +1007,54 @@ def main(args=None) -> str:
         # Initialize collected_extensions to ensure it's always available
         args.collected_extensions = set()
 
+        # Handle interactive extension selection if requested or if no language specified
+        if args.interactive_extensions or not args.lang:
+            console = Console()
+            console.print("[bold yellow]Interactive extension selection mode[/bold yellow]")
+            console.print("[dim]Scanning for file extensions...[/dim]\n")
+            
+            # First pass: scan for extensions only
+            if args.repo:
+                console.print("[bold green]Downloading repository for scanning...[/bold green]")
+                # For repos, we need to download first, then scan
+                download_repo(args, output_file_path, scan_only=True)
+                # Extensions are collected in args.collected_extensions during download
+            elif args.zip:
+                console.print("[bold green]Scanning zip file...[/bold green]")
+                # Create a temporary process to scan extensions
+                with zipfile.ZipFile(args.zip, 'r') as zip_file:
+                    temp_extensions = set()
+                    process_zip_object(zip_file, args, output_file_path, temp_extensions, scan_only=True)
+                    args.collected_extensions = temp_extensions
+            elif args.folder:
+                console.print("[bold green]Scanning folder...[/bold green]")
+                process_folder(args, output_file_path, scan_only=True)
+            
+            # Select extensions interactively
+            selected_extensions = interactive_extension_selection(args.collected_extensions)
+            
+            if not selected_extensions:
+                console.print("[yellow]No extensions selected. Exiting.[/yellow]")
+                return None
+            
+            # Update args.lang with selected extensions
+            args.lang = selected_extensions
+            add_new_extension(args.lang)
+            
+            # Clear the output file for the second pass
+            if os.path.exists(output_file_path):
+                os.remove(output_file_path)
+            
+            # Reset collected extensions for the actual processing
+            args.collected_extensions = set()
+            
+            console.print(f"\n[green]Processing files with extensions:[/green] {', '.join(selected_extensions)}\n")
+        
+        # Process files (either normally or second pass for interactive mode)
         if args.repo:
             console = Console()
-            console.print("[bold green]Downloading repository...[/bold green]")
+            if not args.interactive_extensions:
+                console.print("[bold green]Downloading repository...[/bold green]")
             download_repo(args, output_file_path)
         elif args.zip:
             console = Console()
