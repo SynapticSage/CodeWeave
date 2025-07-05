@@ -11,3 +11,4 @@ outputs/
 test/test.pdf
 proposal.py
 codeweave.egg-info
+build/lib/codeweave

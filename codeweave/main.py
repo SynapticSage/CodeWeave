@@ -374,7 +374,9 @@ def process_folder(args: argparse.Namespace, output_file_path, scan_only=False):
             dirs[:] = [d for d in dirs if d not in args.excluded_dirs]
             
             # Early check: skip if current root contains any excluded directory
-            if any(excluded_dir in root for excluded_dir in args.excluded_dirs):
+            # Check for exact directory name matches in the path, not substring matches
+            path_parts = root.split(os.sep)
+            if any(excluded_dir in path_parts for excluded_dir in args.excluded_dirs):
                 logging.debug(f'Excluded directory, skipping entire folder: {root}')
                 continue
                 
