@@ -324,6 +324,9 @@ def process_folder(args: argparse.Namespace, output_file_path, scan_only=False):
             # Create a single string with '|' separating each pattern
             # e.g. docs|examples|test|scripts
             tree_exclude_regex = '|'.join(exclude_patterns)
+            logging.debug(f"Tree exclude pattern: {tree_exclude_regex}")
+            logging.debug(f"Excluded dirs list: {args.excluded_dirs}")
+            logging.debug(f"Exclude patterns list: {exclude_patterns}")
             # Add the exclude and prune flags to the tree command
             tree_cmd.extend(['-I', tree_exclude_regex, '--prune'])
 
@@ -331,10 +334,25 @@ def process_folder(args: argparse.Namespace, output_file_path, scan_only=False):
         tree_cmd.append(args.folder)
 
         try:
+            logging.debug(f"Running tree command: {' '.join(tree_cmd)}")
             result = subprocess.run(tree_cmd, capture_output=True, text=True, check=True)
             tree_output = result.stdout
+            
+            # Debug: Check if excluded directories appear in output
+            if exclude_patterns:
+                for excluded in args.excluded_dirs:
+                    if excluded in tree_output:
+                        logging.warning(f"Excluded directory '{excluded}' appears in tree output!")
+                        # Count occurrences
+                        count = tree_output.count(excluded)
+                        logging.warning(f"  Found {count} occurrences of '{excluded}'")
+                        
+            if result.stderr:
+                logging.debug(f"Tree stderr: {result.stderr}")
+                
         except subprocess.CalledProcessError as e:
             logging.error("Failed to generate file tree via 'tree' command")
+            logging.error(f"Tree stderr: {e.stderr}")
             tree_output = f'Error generating file tree: {e}'
 
         # Write the tree output to our final file (wipe it first)
@@ -569,6 +587,8 @@ def create_argument_parser():
     # Output options group
     output_group = parser.add_argument_group('Output Options')
     output_group.add_argument('--name_append', type=str, help='Append this string to the output file name')
+    output_group.add_argument('--append', action='store_true', default=False,
+                        help='Append to existing output file instead of overwriting')
     output_group.add_argument('--pbcopy', action='store_true', default=False, 
                         help='Copy the output to clipboard (macOS only)')
     
@@ -794,6 +814,8 @@ def display_configuration_header(args):
         config_table.add_row("File Tree", "✓ Enabled")
     if args.topN:
         config_table.add_row("Top N Lines", str(args.topN))
+    if args.append:
+        config_table.add_row("Mode", "Append to existing file")
     
     # Display header panel and configuration
     console.print(Panel.fit(
@@ -999,12 +1021,15 @@ def main(args=None) -> str:
         # Attach the output_file_path to the args namespace for easy access
         args.output_file_path = output_file_path
 
-        # Display rich configuration header
-        display_configuration_header(args)
-
-        if os.path.exists(output_file_path):
+        # Handle output file - remove if exists unless --append is specified
+        if os.path.exists(output_file_path) and not args.append:
             logging.info(f"Output file {output_file_path} already exists. Removing it.")
             os.remove(output_file_path)
+        elif args.append and os.path.exists(output_file_path):
+            logging.info(f"Appending to existing file {output_file_path}")
+
+        # Display rich configuration header
+        display_configuration_header(args)
 
         # Initialize collected_extensions to ensure it's always available
         args.collected_extensions = set()
